@@ -17,7 +17,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: servscan.l,v 1.11 2002/03/29 18:05:37 faith Exp $
+ * $Id: servscan.l,v 1.13 2002/08/05 11:54:03 cheusov Exp $
  * 
  */
 
@@ -57,6 +57,7 @@ group                       RETURN(T_GROUP);
 database                    RETURN(T_DATABASE);
 data                        RETURN(T_DATA);
 index                       RETURN(T_INDEX);
+index_suffix                RETURN(T_INDEX_SUFFIX);
 filter                      RETURN(T_FILTER);
 prefilter                   RETURN(T_PREFILTER);
 postfilter                  RETURN(T_POSTFILTER);

@@ -17,15 +17,18 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: data.c,v 1.10 2002/03/30 16:04:07 faith Exp $
+ * $Id: data.c,v 1.13 2002/09/12 13:08:06 cheusov Exp $
  * 
  */
 
 #include "dictzip.h"
+#include "utf8_ucs4.h"
+
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include <ctype.h>
 #include <fcntl.h>
+#include <assert.h>
 
 #define USE_CACHE 1
 
@@ -94,6 +97,7 @@ static int dict_read_header( const char *filename,
 	 }
       }
       header->crc = crc;
+      fclose( str );
       return 0;
    }
    header->type = DICT_GZIP;
@@ -251,6 +255,11 @@ dictData *dict_data_open( const char *filename, int computeCRC )
 
 void dict_data_close( dictData *header )
 {
+   int i;
+
+   if (!header)
+      return;
+
    if (header->fd >= 0) {
       munmap( (void *)header->start, header->size );
       close( header->fd );
@@ -268,12 +277,43 @@ void dict_data_close( dictData *header )
 		       header->zStream.msg );
    }
 
+   for (i = 0; i < DICT_CACHE_SIZE; ++i){
+      if (header -> cache [i].inBuffer)
+	 xfree (header -> cache [i].inBuffer);
+   }
+
    memset( header, 0, sizeof( struct dictData ) );
    xfree( header );
 }
 
-char *dict_data_read( dictData *h, unsigned long start, unsigned long size,
-		      const char *preFilter, const char *postFilter )
+char *dict_data_obtain (dictDatabase *db, const dictWord *dw)
+{
+   char *word_copy;
+   int len;
+
+   if (dw -> def){
+      if (-1 == dw -> def_size){
+	 len = strlen (dw -> def);
+      }else{
+	 len = dw -> def_size;
+      }
+
+      word_copy = xmalloc (2 + len);
+      memcpy (word_copy, dw -> def, len);
+      word_copy [len + 0] = '\n';
+      word_copy [len + 1] = 0;
+
+      return word_copy;
+   }else{
+      return dict_data_read_ (
+	 db -> data, dw -> start, dw -> end,
+	 db->prefilter, db->postfilter);
+   }
+}
+
+char *dict_data_read_ (
+   dictData *h, unsigned long start, unsigned long size,
+   const char *preFilter, const char *postFilter )
 {
    char          *buffer, *pt;
    unsigned long end;
@@ -293,7 +333,8 @@ char *dict_data_read( dictData *h, unsigned long start, unsigned long size,
    PRINTF(DBG_UNZIP,
 	  ("dict_data_read( %p, %lu, %lu, %s, %s )\n",
 	   h, start, size, preFilter, postFilter ));
-   
+
+   assert( h != NULL);
    switch (h->type) {
    case DICT_GZIP:
       err_fatal( __FUNCTION__,

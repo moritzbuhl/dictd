@@ -1,6 +1,6 @@
 	% BibTeX refdbms family
 	% THIS FILE WAS AUTOMATICALLY GENERATED FROM:
-	% $Header: /cvs/dict/dictd1/libmaa/doc/refalpha.bst,v 1.1 1996/02/25 22:04:10 faith Exp $
+	% $Header: /cvsroot/dict/dictd1/libmaa/doc/refalpha.bst,v 1.1 1996/02/25 22:04:10 faith Exp $
 	% Modifications copyright (C) 1989 John Wilkes,
 	%		Hewlett-Packard Company.
 	% For BibTeX versions 0.99a or later, LaTeX version 2.09.

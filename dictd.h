@@ -26,10 +26,12 @@
 #include "maa.h"
 #include "zlib.h"
 #include "codes.h"
+#include "plugin.h"
 
 #include "net.h"
 #include <arpa/inet.h>
 #include <errno.h>
+#include <ltdl.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <signal.h>
@@ -52,6 +54,10 @@
 #define DICT_SHORT_ENTRY_NAME    "00-database-short"
 #define DICT_LONG_ENTRY_NAME     "00-database-long"
 #define DICT_INFO_ENTRY_NAME     "00-database-info"
+
+#define DICT_FLAG_UTF8           "00-database-utf8"
+#define DICT_FLAG_ALLCHARS       "00-database-allchars"
+
 #define DICT_DEFAULT_STRATEGY    DICT_LEVENSHTEIN
 
 				/* End of configurable things */
@@ -102,6 +108,12 @@
 
 #define DICT_CACHE_SIZE 5
 
+typedef struct dictStrategy {
+   const char *name;
+   const char *description;
+   int        number;
+} dictStrategy;
+
 typedef struct dictCache {
    int           chunk;
    char          *inBuffer;
@@ -139,6 +151,18 @@ typedef struct dictData {
    dictCache     cache[DICT_CACHE_SIZE];
 } dictData;
 
+typedef struct dictPlugin {
+   lt_dlhandle handle;
+   void *      data;
+   /*   int         status;*/
+
+   dictdb_open_type   dictdb_open;
+   dictdb_search_type dictdb_search;
+   dictdb_free_type   dictdb_free;
+   dictdb_error_type  dictdb_error;
+   dictdb_close_type  dictdb_close;
+} dictPlugin;
+
 typedef struct dictIndex {
    int           fd;		 /* file descriptor */
    const char    *start;	 /* start of mmap'd area */
@@ -146,6 +170,13 @@ typedef struct dictIndex {
    unsigned long size;		 /* size of mmap */
    const char    *optStart[UCHAR_MAX+2]; /* Optimized starting points */
    unsigned long headwords;	 /* computed number of headwords */
+
+   int    flag_utf8;         /* not zero if it has 00-database-ut8 entry*/
+   int    flag_allchars;     /* not zero if it has 00-database-allchars entry*/
+
+   dictPlugin    *plugin;
+
+   const int     *isspacealnum;
 } dictIndex;
 
 typedef struct dictDatabase {
@@ -154,14 +185,16 @@ typedef struct dictDatabase {
    const char *databaseInfoPointer;
    const char *dataFilename;
    const char *indexFilename;
+   const char *indexsuffixFilename;
    const char *filter;
    const char *prefilter;
    const char *postfilter;
    lst_List   acl;
    int        available;	/* if user has authenticated for database */
-   
+
    dictData   *data;
    dictIndex  *index;
+   dictIndex  *index_suffix;
 } dictDatabase;
 
 #define DICT_DENY     0
@@ -184,21 +217,16 @@ typedef struct dictConfig {
    const char    *site;
 } dictConfig;
 
-#define DICT_EXACT        1	/* Exact */
-#define DICT_PREFIX       2	/* Prefix */
-#define DICT_SUBSTRING    3	/* Substring */
-#define DICT_SUFFIX       4	/* Suffix */
-#define DICT_RE           5	/* POSIX 1003.2 (modern) regular expressions */
-#define DICT_REGEXP       6	/* old (basic) regular expresions */
-#define DICT_SOUNDEX      7	/* Soundex */
-#define DICT_LEVENSHTEIN  8	/* Levenshtein */
-
-
 typedef struct dictWord {
+   dictDatabase  *database;
+
    const char    *word;
+
    unsigned long start;
    unsigned long end;
-   dictDatabase  *database;
+
+   const char    *def;
+   int            def_size;
 } dictWord;
 
 typedef struct dictToken {
@@ -210,24 +238,41 @@ typedef struct dictToken {
 extern dictData *dict_data_open( const char *filename, int computeCRC );
 extern void     dict_data_close( dictData *data );
 extern void     dict_data_print_header( FILE *str, dictData *data );
-extern int      dict_data_zip( const char *inFilename, const char *outFilename,
-			       const char *preFilter, const char *postFilter );
-extern char     *dict_data_read( dictData *data,
-				 unsigned long start, unsigned long end,
-				 const char *preFilter,
-				 const char *postFilter );
-extern int      dict_data_filter( char *buffer, int *len, int maxLength,
-				  const char *filter );
+extern int      dict_data_zip(
+   const char *inFilename, const char *outFilename,
+   const char *preFilter, const char *postFilter );
+
+extern char *dict_data_obtain (
+   dictDatabase *db, const dictWord *dw);
+extern char *dict_data_read_ (
+   dictData *data,
+   unsigned long start, unsigned long end,
+   const char *preFilter,
+   const char *postFilter );
+
+extern int   dict_data_filter(
+   char *buffer, int *len, int maxLength,
+   const char *filter );
 
 
 extern const char *dict_index_search( const char *word, dictIndex *idx );
-extern int        dict_search_database( lst_List l,
-					const char *word,
-					dictDatabase *database, int strategy );
-extern dictIndex  *dict_index_open( const char *filename );
+extern int         dict_search (
+   lst_List l,
+   const char *word,
+   dictDatabase *database, int strategy );
+
+extern dictIndex  *dict_index_open(
+   const char *filename,
+   int init_flags, int flag_utf8, int flag_allchars );
 extern void       dict_index_close( dictIndex *i );
+
 extern void       dict_dump_list( lst_List list );
 extern void       dict_destroy_list( lst_List list );
+
+extern int        dict_destroy_datum( const void *datum );
+
+extern int        dict_plugin_open (dictIndex *i, dictDatabase *db);
+extern void       dict_plugin_close (dictIndex *i);
 
 /* dictd.c */
 
@@ -246,6 +291,12 @@ extern int        _dict_forks;	/* GLOBAL VARIABLE */
 extern int  dict_daemon( int s, struct sockaddr_in *csin, char ***argv0,
 			 int delay, int error );
 extern void daemon_terminate( int sig, const char *name );
+extern int get_strategies_count ();
+extern const dictStrategy *get_strategies ();
+extern int lookup_strategy( const char *strategy );
+
+/* */
+extern int        utf8_mode;
 
 				/* dmalloc must be last */
 #ifdef DMALLOC_FUNC_CHECK
