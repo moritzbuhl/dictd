@@ -50,6 +50,7 @@ continuously, and should
 .I not
 be run from
 .BR inetd (8).
+(However, with a fast processor, it is feasible to do so.)
 .P
 Databases are distributed separately from the server.
 .P
@@ -126,15 +127,21 @@ Be verbose.
 Specify configuration file.  The default is
 .IR /etc/dictd.conf ,
 but may be changed in the
-.I dictd.h
-file at compile time (DICT_CONFIG_FILE).
+.I defs.h
+file at compile time (DICTD_CONFIG_FILE).
 .TP
 .BI \-p " port\fR or " \-\-port " port"
 Specifies the port (e.g., 2628).
 The default is 2628, as specified in the DICT Protocol RFC, but may be
 changed in the
-.I dictd.h
+.I defs.h
 file at compile time (DICT_DEFAULT_SERVICE).
+.TP
+.BR \-i " or " \-\-inetd
+Communicate on standard input/output, suitable for use from inetd.
+Although, due to its rather large startup time, this daemon was not
+intended to run from inetd, with a fast processor it is feasible to do
+so. This option also implies \-\-fast-start.
 .TP
 .BI \-\-depth " length"
 Specify the queue length for
@@ -143,7 +150,7 @@ Specifies the number of pending socket connections which are queued by the
 operating system.  Some operating systems may silently limit this value to
 5 (older BSD systems) or 128 (Linux).  The default is 10 but may be changed
 in the
-.I dictd.h
+.I defs.h
 file at compile time (DICT_QUEUE_DEPTH).
 .TP
 .BI \-\-delay " seconds"
@@ -153,7 +160,7 @@ waiting for input and does not include the time the server spends searching
 the database.  Connections are closed without warning since no provision
 for premature connection termination is specified in the DICT protocol
 RFC.  The default is 600 seconds (10 minutes), but may be changed in the
-.I dictd.h
+.I defs.h
 file at compile time (DICT_DEFAULT_DELAY).
 .TP
 .BI \-\-facility " facility"
@@ -185,7 +192,7 @@ parameter should be adjusted to prevent the server machine from being
 overloaded by dict clients, but should not be set so low that many clients
 are denied useful connections. The default is 100, but may be changed in
 the
-.I dictd.h
+.I defs.h
 file at compile time (DICT_DAEMON_LIMIT).
 .TP
 .BI \-\-locale " locale"
@@ -231,9 +238,6 @@ By default all search strategies are enabled.
 Adds strategy 'strat' with the description 'descr'.
 A new search strategy may be implemented with a help of plugins.
 .TP
-.B \-\-no-mmap
-do not use the mmap() function and read entire files into memory instead. 
-.TP
 .BI \-\-test " word \fR or "\-t " word"
 self test -- lookup word
 .TP
@@ -249,6 +253,16 @@ self test -- set dictionary to be searched. The default is '*'.
 .TP
 .BI \-\-test-match
 self test -- set search type to MATCH. The default is DEFINE.
+.TP
+.BI \-\-fast-start
+By default, dictd creates (in memory) additional index
+to make the search faster.
+This option disables this behaviour and makes startup faster.
+Use of this option make sense on CYGWIN, but normally you should not use it.
+.TP
+.B \-\-without-mmap
+do not use the mmap() function and read entire files into memory instead.
+Use this option, if you know exactly what you are doing.
 .TP
 
 .BI \-l " option\fR or " \-\-log " option"
@@ -604,7 +618,7 @@ Specifies the short name of the database (e.g., "1913 Webster's").  If the
 string begins with @, then it specifies the headword to look up in the
 dictionary to find the short name of the database.  The default is
 "@00-database-short", but this may be changed in the
-.I dictd.h
+.I defs.h
 file at compile time (DICT_SHORT_ENTRY_NAME).
 .TP
 .BI info " string"
@@ -612,7 +626,7 @@ Specifies the information about database.  If the
 string begins with @, then it specifies the headword to look up in the
 dictionary to find information.  The default is
 "@00-database-info", but this may be changed in the
-.I dictd.h
+.I defs.h
 file at compile time (DICT_INFO_ENTRY_NAME).
 .TP
 .BI invisible

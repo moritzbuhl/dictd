@@ -17,7 +17,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: daemon.c,v 1.61 2003/03/19 16:43:12 cheusov Exp $
+ * $Id: daemon.c,v 1.64 2003/04/14 09:14:38 cheusov Exp $
  * 
  */
 
@@ -34,11 +34,12 @@
 #include <setjmp.h>
 
 static int          _dict_defines, _dict_matches;
-static int          daemonS;
-static const char   *daemonHostname;
-static const char   *daemonIP;
-static int          daemonPort;
-static char         daemonStamp[256];
+static int          daemonS_in  = 0;
+static int          daemonS_out = 0;
+static const char   *daemonHostname  = NULL;
+static const char   *daemonIP        = NULL;
+static int          daemonPort       = -1;
+static char         daemonStamp[256] = "";
 static jmp_buf      env;
 static int          daemonMime;
 
@@ -316,7 +317,9 @@ static int daemon_check_list( const char *user, lst_List acl )
    dictAccess   *a;
    int          retcode;
 
-   if (!acl) return DICT_ALLOW;
+   if (!acl)
+      return DICT_ALLOW;
+
    for (p = lst_init_position(acl); p; p = lst_next_position(p)) {
       a = lst_get_position(p);
       switch (a->type) {
@@ -378,7 +381,8 @@ void daemon_terminate( int sig, const char *name )
 {
    alarm(0);
    tim_stop( "t" );
-   close(daemonS);
+   close(daemonS_in);
+   close(daemonS_out);
    if (name) {
       daemon_log( DICT_LOG_TERM,
 		  "%s: d/m/c = %d/%d/%d; %sr %su %ss\n",
@@ -400,9 +404,11 @@ void daemon_terminate( int sig, const char *name )
                   dict_format_time( tim_get_user( "t" ) ),
                   dict_format_time( tim_get_system( "t" ) ) );
    }
+
    log_close();
    longjmp(env,1);
    if (sig) exit(sig+128);
+
    exit(0);
 }
 
@@ -413,7 +419,7 @@ static void daemon_write( const char *buf, int len )
    int count;
    
    while (left) {
-      if ((count = write(daemonS, buf, left)) != left) {
+      if ((count = write(daemonS_out, buf, left)) != left) {
 	 if (count <= 0) {
 	    if (errno == EPIPE) {
 	       daemon_terminate( 0, "pipe" );
@@ -494,7 +500,7 @@ static void daemon_text( const char *text )
 
 static int daemon_read( char *buf, int count )
 {
-   return net_read( daemonS, buf, count );
+   return net_read( daemonS_in, buf, count );
 }
 
 static void daemon_ok( int code, const char *string, const char *timer )
@@ -1210,13 +1216,17 @@ static void daemon_show_server( const char *cmdline, int argc, char **argv )
    daemon_printf( "%d server information\n", CODE_SERVER_INFO );
    daemon_mime();
    daemon_printf( "%s\n", dict_get_banner(0) );
-   
-   daemon_printf( "On %s: up %s, %d fork%s (%0.1f/hour)\n",
-		  net_hostname(),
-		  dict_format_time( uptime ),
-		  _dict_forks,
-		  _dict_forks > 1 ? "s" : "",
-		  (_dict_forks/uptime)*3600.0 );
+
+   if (!inetd){
+      daemon_printf (
+	 "On %s: up %s, %d fork%s (%0.1f/hour)\n",
+	 net_hostname(),
+	 dict_format_time( uptime ),
+	 _dict_forks,
+	 _dict_forks > 1 ? "s" : "",
+	 (_dict_forks/uptime)*3600.0 );
+   }
+
    if (count_databases()) {
       daemon_printf( "\nDatabase      Headwords         Index"
 		     "          Data  Uncompressed\n" );
@@ -1397,19 +1407,31 @@ static void daemon_quit( const char *cmdline, int argc, char **argv )
    daemon_terminate( 0, "quit" );
 }
 
+/* The whole sub should be moved here, but I want to keep the diff small. */
+int _handleconn (int delay, int error);
+
+int dict_inetd(char ***argv0, int delay, int error )
+{
+   if (setjmp(env)) return 0;
+
+   daemonPort = -1;
+   daemonIP   = "inetd";
+
+   daemonHostname = daemonIP;
+
+   daemonS_in        = 0;
+   daemonS_out       = 0;
+
+   return _handleconn(delay, error);
+}
+
 int dict_daemon( int s, struct sockaddr_in *csin, char ***argv0, int delay,
 		 int error )
 {
-   char           buf[4096];
-   int            count;
    struct hostent *h;
-   arg_List       cmdline;
-   int            argc;
-   char           **argv;
-   void           (*command)(const char *, int, char **);
-      
+	
    if (setjmp(env)) return 0;
-   
+
    daemonPort = ntohs(csin->sin_port);
    daemonIP   = str_find( inet_ntoa(csin->sin_addr) );
    if ((h = gethostbyaddr((void *)&csin->sin_addr,
@@ -1418,8 +1440,20 @@ int dict_daemon( int s, struct sockaddr_in *csin, char ***argv0, int delay,
    } else
       daemonHostname = daemonIP;
 
-   daemonS           = s;
-   
+   daemonS_in        = s;
+   daemonS_out       = s;
+
+   return _handleconn(delay, error);
+}
+
+int _handleconn (int delay, int error) {
+   char           buf[4096];
+   int            count;
+   arg_List       cmdline;
+   int            argc;
+   char           **argv;
+   void           (*command)(const char *, int, char **);
+      
    _dict_defines     = 0;
    _dict_matches     = 0;
    _dict_comparisons = 0;

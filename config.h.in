@@ -17,6 +17,12 @@
 /* Define if you have <alloca.h> and it should be used (not on Ultrix). */
 #undef HAVE_ALLOCA_H
 
+/* Define if you have the <dlfcn.h> header file. */
+#undef HAVE_DLFCN_H
+
+/* Define if you have the `dlopen' function. */
+#undef HAVE_DLOPEN
+
 /* Define if you don't have `vprintf' but do have `_doprnt.' */
 #undef HAVE_DOPRNT
 
@@ -197,6 +203,9 @@
 
 /* Define if you have the <wchar.h> header file. */
 #undef HAVE_WCHAR_H
+
+/* Define if the system has the type `wchar_t'. */
+#undef HAVE_WCHAR_T
 
 /* Define if you have the `wcrtomb' function. */
 #undef HAVE_WCRTOMB

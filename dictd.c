@@ -17,7 +17,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: dictd.c,v 1.80 2003/03/19 16:43:19 cheusov Exp $
+ * $Id: dictd.c,v 1.85 2003/04/14 09:40:29 cheusov Exp $
  * 
  */
 
@@ -56,6 +56,8 @@ static char       *_dict_argvstart;
 static int        _dict_argvlen;
 
        int        _dict_forks;
+const char        *locale      = "C";
+int                inetd       = 0;
 
 static const char *configFile  = DICT_CONFIG_PATH DICTD_CONFIG_NAME;
 
@@ -127,10 +129,10 @@ const char *dict_format_time( double t )
 
 static void reaper( int dummy )
 {
-#if defined(__osf__) || (defined(__sparc) && defined(__SVR4))
-   int        status;
-#else
+#if 0
    union wait status;
+#else
+   int        status;
 #endif
    pid_t      pid;
 
@@ -664,7 +666,7 @@ static int log_database_info( const void *datum )
 
 static void dict_ltdl_init ()
 {
-#ifdef USE_PLUGIN
+#if USE_PLUGIN && !HAVE_DLFCN_H
    if (lt_dlinit ())
       err_fatal( __FUNCTION__, "Can not initialize 'ltdl' library\n" );
 #endif
@@ -672,7 +674,7 @@ static void dict_ltdl_init ()
 
 static void dict_ltdl_close ()
 {
-#ifdef USE_PLUGIN
+#if USE_PLUGIN && !HAVE_DLFCN_H
    if (lt_dlexit ())
       err_fatal( __FUNCTION__, "Can not deinitialize 'ltdl' library\n" );
 #endif
@@ -793,7 +795,7 @@ const char *dict_get_banner( int shortFlag )
 {
    static char    *shortBuffer = NULL;
    static char    *longBuffer = NULL;
-   const char     *id = "$Id: dictd.c,v 1.80 2003/03/19 16:43:19 cheusov Exp $";
+   const char     *id = "$Id: dictd.c,v 1.85 2003/04/14 09:40:29 cheusov Exp $";
    struct utsname uts;
    
    if (shortFlag && shortBuffer) return shortBuffer;
@@ -867,6 +869,7 @@ static void help( void )
       "-m --mark <minutes>   how often should a timestamp be logged",
       "   --facility <fac>   set syslog logging facility",
       "-d --debug <option>   select debug option",
+      "-i --inetd               run from inetd",
       "-f --force            force startup even if daemon running",
       "   --locale <locale>  specifies the locale used for searching.\n\
                       if no locale is specified, the \"C\" locale is used.",
@@ -876,10 +879,6 @@ static void help( void )
                                    <strategies> is a comma-separated list.",
 "   --add-strategy <strat>:<descr>  adds new strategy <strat>\n\
                                    with a description <descr>.",
-#ifdef HAVE_MMAP
-"   --no-mmap          do not use mmap() function and load files\n\
-                      into memory instead.",
-#endif
 "\n------------------ options for debugging ---------------------------",
 "-t --test <word>                lookup word",
 "   --test-file <file>",
@@ -891,6 +890,11 @@ static void help( void )
 "   --test-match                 show matched words but the definitions",
 "   --test-nooutput              produces no output",
 "   --test-idle                  does everything except search",
+"   --fast-start                 don't create additional index.",
+#ifdef HAVE_MMAP
+"   --without-mmap               do not use mmap() function and load files\n\
+                                into memory instead.",
+#endif
       0 };
    const char        **p = help_msg;
 
@@ -1147,7 +1151,6 @@ int main( int argc, char **argv, char **envp )
    int                useSyslog    = 0;
    int                logOptions   = 0;
    int                forceStartup = 0;
-   const char         *locale      = "C";
    int                i;
 
    const char *       strategy_arg = "exact";
@@ -1178,10 +1181,12 @@ int main( int argc, char **argv, char **envp )
       { "limit",    1, 0, 504 },
       { "facility", 1, 0, 505 },
       { "force",    1, 0, 'f' },
+      { "inetd",    0, 0, 'i' },
       { "locale",           1, 0, 506 },
       { "test-strategy",    1, 0, 507 },
 #ifdef HAVE_MMAP
       { "no-mmap",          0, 0, 508 },
+      { "without-mmap",     0, 0, 508 },
 #endif
       { "test-db",          1, 0, 509 },
       { "default-strategy", 1, 0, 511 },
@@ -1190,12 +1195,13 @@ int main( int argc, char **argv, char **envp )
       { "test-nooutput",    0, 0, 514 },
       { "test-idle",        0, 0, 515 },
       { "add-strategy",     1, 0, 516 },
+      { "fast-start",       0, 0, 517 },
       { 0,                  0, 0, 0  }
    };
 
    release_root_privileges();
 
-   init(argv[0]);
+   init (argv[0]);
 
    flg_register( LOG_SERVER,    "server" );
    flg_register( LOG_CONNECT,   "connect" );
@@ -1223,7 +1229,7 @@ int main( int argc, char **argv, char **envp )
    dbg_register( DBG_ALT,      "alt" );
 
    while ((c = getopt_long( argc, argv,
-			    "vVd:p:c:hL:t:l:sm:f", longopts, NULL )) != EOF)
+			    "vVd:p:c:hL:t:l:sm:fi", longopts, NULL )) != EOF)
       switch (c) {
                                 /* Remember to copy optarg since we're
                                    going to destroy argv soon... */
@@ -1237,6 +1243,10 @@ int main( int argc, char **argv, char **envp )
       case 's': ++useSyslog;                              break;
       case 'm': _dict_markTime = 60*atoi(optarg);         break;
       case 'f': ++forceStartup;                           break;
+      case 'i':
+	 inetd         = 1;
+	 optStart_mode = 0;
+	 break;
       case 'l':
 	 ++logOptions;
 	 flg_set( optarg );
@@ -1284,6 +1294,7 @@ int main( int argc, char **argv, char **envp )
 	 dict_add_strategy (new_strategy, new_strategy_descr);
 
 	 break;
+      case 517: optStart_mode = 0;                        break;
       case 'h':
       default:  help(); exit(0);                          break;
       }
@@ -1437,24 +1448,35 @@ int main( int argc, char **argv, char **envp )
    fflush(stdout);
    fflush(stderr);
 
-   if (detach) net_detach();
+   if (! inetd && detach)
+      net_detach();
 
                                 /* Re-open logs for logging */
    if (logFile)   log_file( "dictd", logFile );
    if (useSyslog) log_syslog( "dictd" );
    if (!detach)   log_stream( "dictd", stderr );
-   if ((logFile || useSyslog || !detach) && !logOptions) set_minimal();
+   if ((logFile || useSyslog || !detach) && !logOptions)
+      set_minimal();
 
    log_info(":I: %d starting %s %24.24s\n",
 	    getpid(), dict_get_banner(0), ctime(&startTime));
-   if (strcmp(locale, "C")) log_info(":I: using locale \"%s\"\n", locale);
+   if (strcmp(locale, "C"))
+      log_info(":I: using locale \"%s\"\n", locale);
 
-   masterSocket = net_open_tcp( service, depth );
-   
-   if (dbg_test(DBG_VERBOSE)) dict_config_print( NULL, DictConfig );
+   if (dbg_test(DBG_VERBOSE))
+      dict_config_print( NULL, DictConfig );
+
    dict_init_databases( DictConfig );
 
    dict_initsetproctitle(argc, argv, envp);
+
+   if (inetd) {
+      dict_inetd(&argv,delay,0);
+      exit(0);
+   }
+
+   masterSocket = net_open_tcp( service, depth );
+
 
    for (;;) {
       dict_setproctitle( "%s: %d/%d",
