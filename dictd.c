@@ -17,7 +17,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: dictd.c,v 1.113 2004/05/30 15:55:05 cheusov Exp $
+ * $Id: dictd.c,v 1.119 2004/11/07 12:07:33 cheusov Exp $
  * 
  */
 
@@ -55,7 +55,7 @@ static int        _dict_daemon;
 static int        _dict_reaps;
 static int        _dict_daemon_limit        = DICT_DAEMON_LIMIT;
 static int        _dict_markTime;
-static char       *_dict_argvstart;
+static char      *_dict_argvstart;
 static int        _dict_argvlen;
 
        int        _dict_forks;
@@ -165,7 +165,7 @@ static void reaper( int dummy )
 
    while ((pid = wait3(&status, WNOHANG, NULL)) > 0) {
       ++_dict_reaps;
-      
+
       if (flg_test(LOG_SERVER))
          log_info( ":I: Reaped %d%s, exit status %i\n",
                    pid,
@@ -461,7 +461,7 @@ static const char *get_entry_info( dictDatabase *db, const char *entryName )
 
    if (
       0 >= dict_search (
-	 list, entryName, db, DICT_EXACT,
+	 list, entryName, db, DICT_STRAT_EXACT,
 	 NULL, NULL, NULL ))
    {
 #ifdef USE_PLUGIN
@@ -563,7 +563,7 @@ static int init_virtual_db_list (const void *datum)
 
       list = lst_create();
       ret = dict_search (
-	 list, DICT_FLAG_VIRTUAL, db, DICT_EXACT,
+	 list, DICT_FLAG_VIRTUAL, db, DICT_STRAT_EXACT,
 	 NULL, NULL, NULL);
 
       switch (ret){
@@ -614,14 +614,10 @@ void dict_disable_strat (dictDatabase *db, const char* strategy)
       memset (db -> strategy_disabled, 0, array_size * sizeof (int));
    }
 
-   strat = lookup_strategy (strategy);
+   strat = lookup_strategy_ex (strategy);
+   assert (strat >= 0);
 
-   if (strat == -1){
-      log_info(":E: strategy '%s' is not available\n", strategy);
-      err_fatal(__FUNCTION__, ":E: terminating due to errors.\n");
-   }else{
-      db -> strategy_disabled [strat] = 1;
-   }
+   db -> strategy_disabled [strat] = 1;
 }
 
 static void init_database_alphabet (dictDatabase *db)
@@ -636,7 +632,7 @@ static void init_database_alphabet (dictDatabase *db)
 
    l = lst_create ();
 
-   ret = dict_search_database_ (l, DICT_FLAG_ALPHABET, db, DICT_EXACT);
+   ret = dict_search_database_ (l, DICT_FLAG_ALPHABET, db, DICT_STRAT_EXACT);
 
    if (ret){
       dw = (const dictWord *) lst_top (l);
@@ -651,9 +647,52 @@ static void init_database_alphabet (dictDatabase *db)
    dict_destroy_list (l);
 }
 
+static void init_database_default_strategy (dictDatabase *db)
+{
+   int ret;
+   lst_List l;
+   const dictWord *dw;
+   char *data;
+   int def_strat = -1;
+   char *p;
+
+   if (!db -> normal_db)
+      return;
+
+   if (db -> default_strategy > 0){
+      /* already set by `default_strategy' directive*/
+      return;
+   }
+
+   l = lst_create ();
+
+   ret = dict_search_database_ (l, DICT_FLAG_DEFAULT_STRAT, db, DICT_STRAT_EXACT);
+
+   if (ret){
+      dw = (const dictWord *) lst_top (l);
+      data = dict_data_obtain (db, dw);
+
+      for (p=data; *p && isalpha ((unsigned char) *p); ++p){
+      }
+      *p = '\0';
+
+      def_strat = lookup_strategy (data);
+      if (-1 == def_strat){
+	 PRINTF (DBG_INIT, (":I:     `%s' is not supported by dictd\n", data));
+      }else{
+	 db -> default_strategy = def_strat;
+      }
+
+      xfree (data);
+   }
+
+   dict_destroy_list (l);
+}
+
 static int init_database( const void *datum )
 {
    dictDatabase *db = (dictDatabase *)datum;
+   const char *strat_name = NULL;
 
    PRINTF (DBG_INIT, (":I: Initializing '%s'\n", db->databaseName));
 
@@ -700,6 +739,20 @@ static int init_database( const void *datum )
       PRINTF (DBG_INIT, (":I:     alphabet: %s\n", db -> alphabet));
    }else{
       PRINTF (DBG_INIT, (":I:     alphabet: (NULL)\n"));
+   }
+
+   if (db -> default_strategy){
+      strat_name = get_strategy (db -> default_strategy) -> name;
+      PRINTF (DBG_INIT, (":I:     default_strategy (from conf file): %s\n",
+			 strat_name));
+   }else{
+      init_database_default_strategy (db);
+      if (db -> default_strategy){
+	 strat_name = get_strategy (db -> default_strategy) -> name;
+	 PRINTF (DBG_INIT, (":I:     default_strategy (from db): %s\n", strat_name));
+      }else{
+	 db -> default_strategy = default_strategy;
+      }
    }
 
    if (db->dataFilename){
@@ -927,7 +980,7 @@ const char *dict_get_banner( int shortFlag )
 {
    static char    *shortBuffer = NULL;
    static char    *longBuffer = NULL;
-   const char     *id = "$Id: dictd.c,v 1.113 2004/05/30 15:55:05 cheusov Exp $";
+   const char     *id = "$Id: dictd.c,v 1.119 2004/11/07 12:07:33 cheusov Exp $";
    struct utsname uts;
    
    if (shortFlag && shortBuffer) return shortBuffer;
@@ -1026,6 +1079,7 @@ static void help( void )
 "   --test-match                 show matched words but the definitions",
 "   --test-nooutput              produces no output",
 "   --test-idle                  does everything except search",
+"   --test-show-info <database>  shows information about specified database",
 "   --fast-start                 don't create additional index.",
 #ifdef HAVE_MMAP
 "   --without-mmap               do not use mmap() function and load files\n\
@@ -1234,6 +1288,7 @@ static const char *database_arg="*";
 
 static int idle_mode     = 0;
 static int nooutput_mode = 0;
+static int show_info_mode= 0;
 
 static void dict_test (
    const char *word,
@@ -1350,7 +1405,27 @@ static void dict_test_file (const char *filename, int strategy)
 */
 }
 
-int main( int argc, char **argv, char **envp )
+extern void daemon_show_info (
+   const char *cmdline, int argc, const char **argv);
+
+static void dict_test_show_info (const char *database)
+{
+   const char * argv [] = {"SHOW", "INFO", database};
+
+   dict_config_print( NULL, DictConfig );
+   dict_init_databases( DictConfig );
+   dict_make_dbs_available (DictConfig);
+
+   daemon_show_info ("", 3, argv);
+
+   dict_close_databases (DictConfig);
+
+   destroy ();
+
+   exit(0);
+}
+
+int main (int argc, char **argv, char **envp)
 {
    int                childSocket;
    int                masterSocket;
@@ -1371,7 +1446,7 @@ int main( int argc, char **argv, char **envp )
    int                i;
 
    const char *       strategy_arg = "exact";
-   int                strategy     = DICT_EXACT;
+   int                strategy     = DICT_STRAT_EXACT;
 
    const char *       default_strategy_arg = "???";
 
@@ -1415,6 +1490,7 @@ int main( int argc, char **argv, char **envp )
       { "fast-start",       0, 0, 517 },
       { "pp",               1, 0, 518 },
       { "listen-to",        1, 0, 519 },
+      { "test-show-info",   1, 0, 520 },
       { 0,                  0, 0, 0  }
    };
 
@@ -1444,6 +1520,8 @@ int main( int argc, char **argv, char **envp )
    dbg_register( DBG_NODETACH, "nodetach" );
    dbg_register( DBG_NOFORK,   "nofork" );
    dbg_register( DBG_ALT,      "alt" );
+
+   log_stream ("dictd", stderr);
 
    while ((c = getopt_long( argc, argv,
 			    "vVd:p:c:hL:t:l:sm:fi", longopts, NULL )) != EOF)
@@ -1484,7 +1562,7 @@ int main( int argc, char **argv, char **envp )
 	 break;
       case 511:
 	 default_strategy_arg = str_copy (optarg);
-	 default_strategy = lookup_strategy (default_strategy_arg);
+	 default_strategy = lookup_strategy_ex (default_strategy_arg);
 	 break;
       case 512:
 	 match_mode = 1;
@@ -1514,11 +1592,17 @@ int main( int argc, char **argv, char **envp )
       case 517: optStart_mode = 0;                        break;
       case 518: preprocessor = str_copy (optarg);         break;
       case 519: bind_to      = str_copy (optarg);         break;
+      case 520:
+	 database_arg = str_copy(optarg);
+	 show_info_mode = 1;
+	 break;
       case 'h':
       default:  help(); exit(0);                          break;
       }
 
-   if (testWord || testFile || inetd)
+   log_stream (NULL, NULL);
+
+   if (testWord || testFile || inetd || show_info_mode)
       detach = 0;
 
    if (
@@ -1546,14 +1630,21 @@ int main( int argc, char **argv, char **envp )
    if (! inetd && detach)
       net_detach();
 
-   if (logFile) log_file( "dictd", logFile );
-   if (useSyslog) log_syslog( "dictd" );
+   if (logFile)   log_file ("dictd", logFile);
+   if (useSyslog) log_syslog ("dictd");
+   if (! inetd && ! detach)   log_stream ("dictd", stderr);
 
    release_root_privileges();
 
-   set_locale_and_flags (locale);
+   if ((logFile || useSyslog || !detach) && !logOptions)
+      set_minimal();
 
    time(&startTime);
+   log_info(":I: %d starting %s %24.24s\n",
+	    getpid(), dict_get_banner(0), ctime(&startTime));
+
+   set_locale_and_flags (locale);
+
    tim_start( "dictd" );
    alarm(_dict_markTime);
 
@@ -1562,13 +1653,16 @@ int main( int argc, char **argv, char **envp )
       postprocess_filenames (DictConfig);
    }
 
-/*   log_stream( "dictd", stderr );*/
    sanity(configFile);
-/*   log_stream( "dictd", NULL );*/
 
    if (match_mode)
       strategy |= DICT_MATCH_MASK;
 
+
+   if (show_info_mode) {
+      dict_test_show_info (database_arg);
+      abort (); /* this should not happen */
+   }
 
    if (testWord) {		/* stand-alone test mode */
       dict_test_word (testWord, strategy);
@@ -1595,12 +1689,6 @@ int main( int argc, char **argv, char **envp )
    fflush(stdout);
    fflush(stderr);
 
-   if (!detach)   log_stream( "dictd", stderr );
-   if ((logFile || useSyslog || !detach) && !logOptions)
-      set_minimal();
-
-   log_info(":I: %d starting %s %24.24s\n",
-	    getpid(), dict_get_banner(0), ctime(&startTime));
    if (strcmp(locale, "C"))
       log_info(":I: using locale \"%s\"\n", locale);
 

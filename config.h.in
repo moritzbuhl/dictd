@@ -45,9 +45,6 @@
 /* Define to 1 if you have the `getopt_long' function. */
 #undef HAVE_GETOPT_LONG
 
-/* Define to 1 if you have the `getpagesize' function. */
-#undef HAVE_GETPAGESIZE
-
 /* Define to 1 if you have the `gettimeofday' function. */
 #undef HAVE_GETTIMEOFDAY
 
@@ -56,6 +53,9 @@
 
 /* Define to 1 if you have the `inet_ntoa' function. */
 #undef HAVE_INET_NTOA
+
+/* Define to 1 if you have the `initgroups' function. */
+#undef HAVE_INITGROUPS
 
 /* Define to 1 if you have the <inttypes.h> header file. */
 #undef HAVE_INTTYPES_H
@@ -68,9 +68,6 @@
 
 /* Define to 1 if you have the <langinfo.h> header file. */
 #undef HAVE_LANGINFO_H
-
-/* Define to 1 if you have the `c' library (-lc). */
-#undef HAVE_LIBC
 
 /* Define to 1 if you have the `nsl' library (-lnsl). */
 #undef HAVE_LIBNSL
@@ -112,7 +109,7 @@
 /* Define to 1 if you have the `memset' function. */
 #undef HAVE_MEMSET
 
-/* Define to 1 if you have a working `mmap' system call. */
+/* Define to 1 if you have the `mmap' function. */
 #undef HAVE_MMAP
 
 /* Define to 1 if you have the `munmap' function. */
@@ -233,6 +230,9 @@
 /* Define to 1 if you have the `wait3' system call. Deprecated, you should no
    longer depend upon `wait3'. */
 #undef HAVE_WAIT3
+
+/* Define to 1 if you have the `waitpid' function. */
+#undef HAVE_WAITPID
 
 /* Define to 1 if you have the <wchar.h> header file. */
 #undef HAVE_WCHAR_H

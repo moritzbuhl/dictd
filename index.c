@@ -17,7 +17,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: index.c,v 1.89 2004/03/22 17:17:06 cheusov Exp $
+ * $Id: index.c,v 1.96 2004/11/19 19:42:12 cheusov Exp $
  * 
  */
 
@@ -60,11 +60,12 @@ int optStart_mode = 1;	/* Optimize search range for constant start */
 dictConfig *DictConfig;
 
 int _dict_comparisons;
-static int isspacealnumtab[UCHAR_MAX + 1];
+static int isspacealnumtab [UCHAR_MAX + 1];
 static int isspacealnumtab_allchars[UCHAR_MAX + 1];
 static int isspacepuncttab [UCHAR_MAX + 1];
-static int char2indextab[UCHAR_MAX + 2];
-static int index2chartab[UCHAR_MAX + 2];
+static int char2indextab   [UCHAR_MAX + 2];
+static int index2chartab   [UCHAR_MAX + 2];
+static int tolowertab      [UCHAR_MAX + 1];
 
 char global_alphabet_8bit [UCHAR_MAX + 2];
 char global_alphabet_ascii [UCHAR_MAX + 2];
@@ -141,9 +142,16 @@ static void dict_table_init(void)
 	 isspacealnumtab [i] = 0;
       }
 
+      tolowertab [i] = tolower (i);
+      if (i >= 0x80){
+	 if (utf8_mode || (!utf8_mode && !bit8_mode)){
+	    /* utf-8 or ASCII mode */
+	    tolowertab [i] = i;
+	 }
+      }
+
       if (isspace(i) || ispunct(i)){
 	 isspacepuncttab [i] = 1;
-
       }else{
 	 isspacepuncttab [i] = 0;
       }
@@ -215,6 +223,8 @@ static int compare_allchars(
    int c1, c2;
    int result;
 
+   PRINTF(DBG_SEARCH,("   We are inside index.c:compare_allchars\n"));
+
    /* FIXME.  Optimize this inner loop. */
    while (*word && start < end && *start != '\t') {
 //      if (!isspacealnum(*start)) {
@@ -266,6 +276,8 @@ static int compare_alnumspace(
 
    assert (dbindex);
 
+   PRINTF(DBG_SEARCH,("   We are inside index.c:compare_alnumspace\n"));
+
    /* FIXME.  Optimize this inner loop. */
    while (*word && start < end && *start != '\t') {
       if (!dbindex -> isspacealnum[* (const unsigned char *) start]) {
@@ -276,15 +288,15 @@ static int compare_alnumspace(
       if (isspace( (unsigned char) *start ))
 	 c2 = ' ';
       else
-	 c2 = tolower(* (unsigned char *) start);
+	 c2 = tolowertab [* (unsigned char *) start];
 
       if (isspace( (unsigned char) *word ))
 	 c1 = ' ';
       else
-	 c1 = tolower(* (unsigned char *) word);
+	 c1 = tolowertab [* (unsigned char *) word];
 #else
-      c2 = tolower(* (unsigned char *) start);
-      c1 = tolower(* (unsigned char *) word);
+      c2 = tolowertab [* (unsigned char *) start];
+      c1 = tolowertab [* (unsigned char *) word];
 #endif
       if (c1 != c2) {
 	 if (utf8_mode){
@@ -358,7 +370,7 @@ static int compare(
    if (dbg_test(DBG_SEARCH)) {
       for (
 	 d = buf, s = start;
-	 d - buf < sizeof (buf)-1 && s < end && *s != '\t';)
+	 d - buf + 1 < (int) sizeof (buf) && s < end && *s != '\t';)
       {
 	 *d++ = *s++;
       }
@@ -370,7 +382,10 @@ static int compare(
 
    ++_dict_comparisons;		/* counter for profiling */
 
-   if (dbindex && (dbindex -> flag_allchars || dbindex -> flag_utf8)){
+   if (dbindex &&
+       (dbindex -> flag_allchars || dbindex -> flag_utf8 ||
+	dbindex -> flag_8bit))
+   {
       return compare_allchars( word, start, end );
    }else{
       return compare_alnumspace( word, dbindex, start, end );
@@ -431,7 +446,7 @@ static const char *binary_search_8bit(
       if (dbg_test(DBG_SEARCH)) {
          for (
 	    d = buf, s = pt;
-	    s < end && *s != '\t' && d - buf < sizeof (buf)-1;)
+	    s < end && *s != '\t' && d - buf + 1 < (int) sizeof (buf);)
 	 {
 	    *d++ = *s++;
 	 }
@@ -746,7 +761,7 @@ static int dict_search_brute( lst_List l,
 	 ++p;
 	 while (p < end && !dbindex -> isspacealnum[*p]) ++p;
       }
-      if (tolower(*p) == *word) {
+      if (tolowertab [*p] == *word) {
 	 result = compare( word, dbindex, p, end );
 	 if (result == -1 || result == 0) {
 	    switch (flag){
@@ -830,7 +845,7 @@ static int dict_search_bmh( lst_List l,
    for (i = 0; i < patlen-1; i++)
       skip[(unsigned char)word[i]] = patlen-i-1;
 
-   for (p = start+patlen-1; p < end; f ? (f=NULL) : (p += skip[tolower(*p)])) {
+   for (p = start+patlen-1; p < end; f ? (f=NULL) : (p += skip [tolowertab [*p]])) {
       while (*p == '\t') {
 	 FIND_NEXT(p,end);
 	 p += patlen-1;
@@ -851,7 +866,7 @@ static int dict_search_bmh( lst_List l,
 	    --pt;
 	 }
 
-	 if (tolower(*pt--) != *wpt--)
+	 if (tolowertab [*pt--] != *wpt--)
 	    break;
       }
 
@@ -1340,6 +1355,10 @@ int dict_search_database_ (
    assert (database);
    assert (database -> index);
 
+   if (strategy == DICT_STRAT_DOT){
+      strategy = database -> default_strategy;
+   }
+
    buf = alloca( strlen( word ) + 1 );
 
 #if HAVE_UTF8
@@ -1387,31 +1406,31 @@ int dict_search_database_ (
 */
 
    switch (strategy) {
-   case DICT_EXACT:
+   case DICT_STRAT_EXACT:
       return dict_search_exact( l, buf, database, database->index );
 
-   case DICT_PREFIX:
+   case DICT_STRAT_PREFIX:
       return dict_search_prefix( l, buf, database, database->index );
 
-   case DICT_SUBSTRING:
+   case DICT_STRAT_SUBSTRING:
       return dict_search_substring( l, buf, database, database->index );
 
-   case DICT_SUFFIX:
+   case DICT_STRAT_SUFFIX:
       return dict_search_suffix( l, buf, database );
 
-   case DICT_RE:
+   case DICT_STRAT_RE:
       return dict_search_re( l, word, database, database->index );
 
-   case DICT_REGEXP:
+   case DICT_STRAT_REGEXP:
       return dict_search_regexp( l, word, database, database->index );
 
-   case DICT_SOUNDEX:
+   case DICT_STRAT_SOUNDEX:
       return dict_search_soundex( l, buf, database, database->index );
 
-   case DICT_LEVENSHTEIN:
+   case DICT_STRAT_LEVENSHTEIN:
       return dict_search_levenshtein( l, buf, database, database->index);
 
-   case DICT_WORD:
+   case DICT_STRAT_WORD:
       return dict_search_word( l, buf, database);
 
    default:
@@ -1544,6 +1563,8 @@ dictIndex *dict_index_open(
    int         j;
    char        buf[2];
 
+   int         old_8bit_format = 0;
+
    int first_char;
    int first_char_uc;
 
@@ -1608,7 +1629,7 @@ dictIndex *dict_index_open(
       i->isspacealnum = isspacealnumtab_allchars;
 
       i->flag_allchars =
-	 0 != dict_search_database_ (NULL, DICT_FLAG_ALLCHARS, &db, DICT_EXACT);
+	 0 != dict_search_database_ (NULL, DICT_FLAG_ALLCHARS, &db, DICT_STRAT_EXACT);
       PRINTF(DBG_INIT, (":I:     \"%s\": flag_allchars=%i\n", filename, i->flag_allchars));
 
       /* utf8 flag */
@@ -1616,20 +1637,29 @@ dictIndex *dict_index_open(
 	 i -> isspacealnum = isspacealnumtab;
 
       i->flag_utf8 =
-	 0 != dict_search_database_ (NULL, DICT_FLAG_UTF8, &db, DICT_EXACT);
+	 0 != dict_search_database_ (NULL, DICT_FLAG_UTF8, &db, DICT_STRAT_EXACT);
       PRINTF(DBG_INIT, (":I:     \"%s\": flag_utf8=%i\n", filename, i->flag_utf8));
       if (i->flag_utf8 && !utf8_mode){
-	 fprintf (stderr, "locale '%s' can not be used for utf-8 dictionaries\n", locale);
 	 log_info( ":E: locale '%s' can not be used for utf-8 dictionaries. Exiting\n", locale );
 	 exit (1);
       }
 
       /* 8bit flag */
       i->flag_8bit =
-	 0 != dict_search_database_ (NULL, DICT_FLAG_8BIT, &db, DICT_EXACT);
+	 0 != dict_search_database_ (NULL, DICT_FLAG_8BIT_NEW, &db, DICT_STRAT_EXACT);
+      old_8bit_format =
+	 0 != dict_search_database_ (NULL, DICT_FLAG_8BIT_OLD, &db, DICT_STRAT_EXACT);
+
+      if (old_8bit_format){
+	 log_info( ":E: index file '%s' was created using dictfmt <1.9.15\n"
+	           ":E:   and can not be used with dictd-1.9.15 or later\n"
+	           ":E:   Rebuild it like this:\n"
+	           ":E:   dictunformat db.index < db.dict | dictfmt -t --locale <8bit-locale> db-new\n", filename );
+	 exit (1);
+      }
+
       PRINTF(DBG_INIT, (":I:     \"%s\": flag_8bit=%i\n", filename, i->flag_8bit));
       if (i->flag_8bit && !bit8_mode){
-	 fprintf (stderr, "locale '%s' can not be used for 8-bit dictionaries\n", locale);
 	 log_info( ":E: locale '%s' can not be used for 8-bit dictionaries. Exiting\n", locale );
 	 exit (1);
       }

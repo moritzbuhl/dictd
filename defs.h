@@ -16,7 +16,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: defs.h,v 1.7 2004/01/05 12:25:10 cheusov Exp $
+ * $Id: defs.h,v 1.9 2004/11/19 19:42:00 cheusov Exp $
  */
 
 #ifndef _DEFS_H_
@@ -45,10 +45,12 @@
 #define DICT_INFO_ENTRY_NAME     DICT_ENTRY_PREFIX"-info"
 
 #define DICT_FLAG_UTF8           DICT_ENTRY_PREFIX"-utf8"
-#define DICT_FLAG_8BIT           DICT_ENTRY_PREFIX"-8bit"
+#define DICT_FLAG_8BIT_NEW       DICT_ENTRY_PREFIX"-8bit-new"
+#define DICT_FLAG_8BIT_OLD       DICT_ENTRY_PREFIX"-8bit"
 #define DICT_FLAG_ALLCHARS       DICT_ENTRY_PREFIX"-allchars"
 #define DICT_FLAG_VIRTUAL        DICT_ENTRY_PREFIX"-virtual"
 #define DICT_FLAG_ALPHABET       DICT_ENTRY_PREFIX"-alphabet"
+#define DICT_FLAG_DEFAULT_STRAT  DICT_ENTRY_PREFIX"-default-strategy"
 
 #define DICT_ENTRY_PLUGIN        DICT_ENTRY_PREFIX"-plugin"
 #define DICT_ENTRY_PLUGIN_DATA   DICT_ENTRY_PREFIX"-plugin-data"
@@ -170,7 +172,7 @@ typedef struct dictIndex {
    unsigned long headwords;	 /* computed number of headwords */
 
    int    flag_utf8;         /* not zero if it has 00-database-utf8 entry*/
-   int    flag_8bit;         /* not zero if it has 00-database-8bit entry*/
+   int    flag_8bit;         /* not zero if it has 00-database-8bit-new entry*/
    int    flag_allchars;     /* not zero if it has 00-database-allchars entry*/
 
    const int     *isspacealnum;
@@ -207,6 +209,8 @@ typedef struct dictDatabase {
    int virtual_db;   /* non-zero for virtual databases */
    int plugin_db;    /* non-zero for plugin entry */
    int normal_db;    /* non-zero for normal database */
+
+   int default_strategy;    /* default search strategy for `.' */
 
    /* database_virtual members */
    const char *database_list;  /* comma-separated list of database names */
