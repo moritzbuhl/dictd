@@ -17,7 +17,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: index.c,v 1.52 2003/02/10 19:24:28 cheusov Exp $
+ * $Id: index.c,v 1.52.2.1 2003/03/02 11:31:18 cheusov Exp $
  * 
  */
 
@@ -578,6 +578,7 @@ static dictWord *dict_word_create(
    char       *s, *d;
 
    assert (dbindex);
+   assert (pt >= dbindex->start && pt < dbindex->end);
 
    for (;pt < dbindex->end && *pt != '\n'; pt++, offset++) {
       if (*pt == '\t') {
@@ -883,8 +884,13 @@ static int dict_search_bmh( lst_List l,
 	 }
 
 	 for (; pt > start && *pt != '\n'; --pt)
-	    if (*pt == '\t') goto continue2;
-	 if (pt > start) ++pt;
+	    if (*pt == '\t')
+	       goto continue2;
+
+	 ++pt;
+
+	 assert (pt >= start && pt < end);
+
 	 if (!previous || altcompare(previous, pt, dbindex->end)) {
 	    ++count;
 	    datum = dict_word_create( previous = pt, database, dbindex );
