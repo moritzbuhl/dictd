@@ -187,7 +187,7 @@ int dictdb_open (
 
    assert (max_strat_num > 0);
    data -> m_strategies = new dictPluginData_strategy [max_strat_num];
-   memset (data -> m_strategies, 0, sizeof(data -> m_strategies) * max_strat_num);
+   memset (data -> m_strategies, 0, sizeof(dictPluginData_strategy) * max_strat_num);
 
    for (i=0; i < init_data_size; ++i){
       switch (init_data [i].id){
@@ -289,6 +289,8 @@ int dictdb_search (
 
    const int match_search_type = search_strategy & DICT_MATCH_MASK;
    search_strategy &= ~DICT_MATCH_MASK;
+
+//   fprintf (stderr, "is it for me?\n");
 
 // does the WORD contain valid characters only?
    for (int i = 0; i < word_size; ++i){

@@ -17,12 +17,13 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: dictd.c,v 1.66.2.1 2003/02/23 17:51:52 cheusov Exp $
+ * $Id: dictd.c,v 1.79 2003/03/09 17:07:36 cheusov Exp $
  * 
  */
 
 #include "dictd.h"
 #include "servparse.h"
+#include "strategy.h"
 
 #include <grp.h>                /* initgroups */
 #include <pwd.h>                /* getpwuid */
@@ -284,6 +285,7 @@ static void postprocess_filenames (dictConfig *dc)
       db -> indexFilename = postprocess_dict_filename (db -> indexFilename);
       db -> indexsuffixFilename = postprocess_dict_filename (db -> indexsuffixFilename);
       db -> indexwordFilename = postprocess_dict_filename (db -> indexwordFilename);
+      db -> pluginFilename = postprocess_plugin_filename (db -> pluginFilename);
    }
 
    dc -> site = postprocess_dict_filename (dc -> site);
@@ -379,6 +381,7 @@ static int config_print( const void *datum, void *arg )
    FILE         *s  = (FILE *)arg;
 
    fprintf( s, "database %s {\n", db->databaseName );
+
    if (db->dataFilename)
       fprintf( s, "   data       %s\n", db->dataFilename );
    if (db->indexFilename)
@@ -395,8 +398,11 @@ static int config_print( const void *datum, void *arg )
       fprintf( s, "   postfilter %s\n", db->postfilter );
    if (db->databaseShort)
       fprintf( s, "   name       %s\n", db->databaseShort );
-   if (db->acl) acl_print( s, db->acl, 3 );
+   if (db->acl)
+      acl_print( s, db->acl, 3 );
+
    fprintf( s, "}\n" );
+
    return 0;
 }
 
@@ -447,78 +453,94 @@ static const char *get_entry_info( dictDatabase *db, const char *entryName )
    return pt;
 }
 
+static lst_List string2virtual_db_list (char *s)
+{
+   lst_Position db_pos;
+   int len, i;
+   lst_List virtual_db_list;
+   char *p;
+
+   dictDatabase *global_db_list = NULL;
+
+   p   = s;
+   len = strlen (s);
+
+   virtual_db_list = lst_create ();
+
+   for (i = 0; i <= len; ++i){
+      if (s [i] == ',' || s [i] == '\n' || s [i] == '\0'){
+	 s [i] = '\0';
+
+	 if (*p){
+	    db_pos = lst_init_position (DictConfig->dbl);
+
+	    while (db_pos){
+	       global_db_list = lst_get_position (db_pos);
+
+	       if (!strcmp (global_db_list -> databaseName, p)){
+		  lst_append (virtual_db_list, global_db_list);
+		  break;
+	       }
+
+	       db_pos = lst_next_position (db_pos);
+	    }
+
+	    if (!db_pos){
+	       log_info( ":E: Unknown database '%s'\n", p );
+	       PRINTF(DBG_INIT, (":E: Unknown database '%s'\n", p));
+	       exit (2);
+	    }
+	 }
+
+	 p = s + i + 1;
+      }
+   }
+
+   return virtual_db_list;
+}
+
 static int init_virtual_db_list (const void *datum)
 {
    lst_List list;
    dictDatabase *db  = (dictDatabase *)datum;
-   dictDatabase *db2 = NULL;
    dictWord *dw;
    char *buf;
    int ret;
-   char *p;
-   int len, i;
-   lst_Position db_pos;
 
-   if (!db -> index)
-      return 0;
+   if (db -> database_list){
+      buf = xstrdup (db -> database_list);
+      db -> virtual_db_list = string2virtual_db_list (buf);
+      xfree (buf);
+   }else{
+      if (!db -> index)
+	 return 0;
 
-   list = lst_create();
-   ret = dict_search (
-      list, DICT_FLAG_VIRTUAL, db, DICT_EXACT,
-      NULL, NULL, NULL);
+      list = lst_create();
+      ret = dict_search (
+	 list, DICT_FLAG_VIRTUAL, db, DICT_EXACT,
+	 NULL, NULL, NULL);
 
-   switch (ret){
-   case 1: case 2:
-      db -> virtual_db_list = lst_create ();
+      switch (ret){
+      case 1: case 2:
+	 dw  = (dictWord *) lst_pop (list);
+	 buf = dict_data_obtain (db, dw);
+	 dict_destroy_datum (dw);
 
-      dw  = (dictWord *) lst_pop (list);
-      buf = dict_data_obtain (db, dw);
-      dict_destroy_datum (dw);
+	 db -> virtual_db_list = string2virtual_db_list (buf);
 
-      p   = buf;
-      len = strlen (buf);
-
-      for (i = 0; i <= len; ++i){
-	 if (buf [i] == '\n' || buf [i] == '\0'){
-	    buf [i] = '\0';
-
-	    if (*p){
-	       db_pos = lst_init_position (DictConfig->dbl);
-
-	       while (db_pos){
-		  db2 = lst_get_position (db_pos);
-
-		  if (!strcmp (db2 -> databaseName, p)){
-		     lst_append (db -> virtual_db_list, db2);
-		     break;
-		  }
-
-		  db_pos = lst_next_position (db_pos);
-	       }
-
-	       if (!db_pos){
-		  log_info( ":E: Unknown database '%s'\n", p );
-		  PRINTF(DBG_INIT, (":E: Unknown database '%s'\n", p));
-		  exit (2);
-	       }
-	    }
-
-	    p = buf + i + 1;
-	 }
+	 xfree (buf);
+	 break;
+      case 0:
+	 break;
+      default:
+	 err_fatal (
+	    __FUNCTION__,
+	    "index file contains more than one %s entry",
+	    DICT_FLAG_VIRTUAL);
       }
 
-      xfree (buf);
-      break;
-   case 0:
-      break;
-   default:
-      err_fatal (
-	 __FUNCTION__,
-	 "index file contains more than one %s entry",
-	 DICT_FLAG_VIRTUAL);
+      dict_destroy_list (list);
    }
-
-   dict_destroy_list (list);
 
    return 0;
 }
@@ -527,7 +549,7 @@ static int init_plugin( const void *datum )
 {
 #ifdef USE_PLUGIN
    dictDatabase *db = (dictDatabase *)datum;
-   dict_plugin_open (db->index, db);
+   dict_plugin_open (db);
 #endif
 
    return 0;
@@ -538,6 +560,7 @@ static int init_database( const void *datum )
    dictDatabase *db = (dictDatabase *)datum;
 
    PRINTF (DBG_INIT, (":I: Initializing '%s'\n", db->databaseName));
+
    PRINTF (DBG_INIT, (":I:   Opening indices\n"));
 
    db->index        = dict_index_open( db->indexFilename, 1, 0, 0 );
@@ -568,20 +591,25 @@ static int init_database( const void *datum )
    PRINTF (DBG_INIT, (":I:   Opening data\n"));
    db->data         = dict_data_open( db->dataFilename, 0 );
 
+   PRINTF(DBG_INIT,
+	  (":I: '%s' initialized\n", db->databaseName));
+
+   return 0;
+}
+
+static int init_database_short (const void *datum)
+{
+   dictDatabase *db = (dictDatabase *)datum;
+
    if (!db->databaseShort)
       db->databaseShort = get_entry_info( db, DICT_SHORT_ENTRY_NAME );
-   else if (*db->databaseShort == '@')
+   else if (*db->databaseShort == '@' && !db -> virtual_db)
       db->databaseShort = get_entry_info( db, db->databaseShort + 1 );
    else
       db->databaseShort = xstrdup (db->databaseShort);
 
    if (!db->databaseShort)
       db->databaseShort = xstrdup (db->databaseName);
-
-   PRINTF(DBG_INIT,
-	  (":I: %s \"%s\" initialized\n",db->databaseName,db->databaseShort));
-
-   db -> virtual_db_list = NULL;
 
    return 0;
 }
@@ -590,7 +618,7 @@ static int close_plugin (const void *datum)
 {
 #ifdef USE_PLUGIN
    dictDatabase  *db = (dictDatabase *)datum;
-   dict_plugin_close (db -> index);
+   dict_plugin_close (db);
 #endif
 
    return 0;
@@ -617,6 +645,8 @@ static int close_database (const void *datum)
       xfree ((void *) db -> indexwordFilename);
    if (db -> indexsuffixFilename)
       xfree ((void *) db -> indexsuffixFilename);
+   if (db -> pluginFilename)
+      xfree ((void *) db -> pluginFilename);
 
    return 0;
 }
@@ -656,12 +686,39 @@ static void dict_ltdl_close ()
 #endif
 }
 
+/*
+  Makes dictionary_exit db invisible if it is the last visible one
+ */
+static void make_dictexit_invisible (dictConfig *c)
+{
+   lst_Position p;
+   dictDatabase *db;
+   dictDatabase *db_exit = NULL;
+
+   LST_ITERATE(c -> dbl, p, db) {
+      if (!db -> invisible){
+	 if (db_exit)
+	    db_exit -> invisible = 0;
+
+	 db_exit = NULL;
+      }
+
+      if (db -> exit_db){
+	 db_exit = db;
+	 db_exit -> invisible = 1;
+      }
+   }
+}
+
 static void dict_init_databases( dictConfig *c )
 {
+   make_dictexit_invisible (c);
+
    lst_iterate( c->dbl, init_database );
-   lst_iterate( c->dbl, log_database_info );
-   lst_iterate( c->dbl, init_virtual_db_list );
    lst_iterate( c->dbl, init_plugin );
+   lst_iterate( c->dbl, init_virtual_db_list );
+   lst_iterate( c->dbl, init_database_short );
+   lst_iterate( c->dbl, log_database_info );
 }
 
 static void dict_close_databases (dictConfig *c)
@@ -703,13 +760,16 @@ static int dump_def( const void *datum )
 {
    char         *buf;
    const dictWord     *dw = (dictWord *)datum;
-   const dictDatabase *db = dw -> database;
+
+   const dictDatabase *db = dw -> database_visible;
+   if (!db)
+      db = dw -> database;
 
    if (match_mode){
       printf (
 	 "%s:\t\"%s\"\n", db -> databaseName, dw -> word );
    }else{
-      buf = dict_data_obtain( db, dw );
+      buf = dict_data_obtain( dw -> database, dw );
 
       printf (
 	 "From %s [%s]:\n\n%s\n", db -> databaseShort, db -> databaseName, buf );
@@ -725,8 +785,8 @@ static int call_dictdb_free (const void *datum)
    const dictWord     *dw = (dictWord *)datum;
    const dictDatabase *db = dw -> database;
 
-   if (db -> index -> plugin)
-      db -> index -> plugin -> dictdb_free (db -> index -> plugin -> data);
+   if (db -> plugin)
+      db -> plugin -> dictdb_free (db -> plugin -> data);
 
    return 0;
 }
@@ -750,7 +810,7 @@ const char *dict_get_banner( int shortFlag )
 {
    static char    *shortBuffer = NULL;
    static char    *longBuffer = NULL;
-   const char     *id = "$Id: dictd.c,v 1.66.2.1 2003/02/23 17:51:52 cheusov Exp $";
+   const char     *id = "$Id: dictd.c,v 1.79 2003/03/09 17:07:36 cheusov Exp $";
    struct utsname uts;
    
    if (shortFlag && shortBuffer) return shortBuffer;
@@ -831,6 +891,8 @@ static void help( void )
                       the default is 'lev'.",
 "   --without-strategy <strategies> disable strategies.\n\
                                    <strategies> is a comma-separated list.",
+"   --add-strategy <strat>:<descr>  adds new strategy <strat>\n\
+                                   with a description <descr>.",
 #ifdef HAVE_MMAP
 "   --no-mmap          do not use mmap() function and load files\n\
                       into memory instead.",
@@ -899,6 +961,7 @@ static void release_root_privileges( void )
 static void sanity(const char *confFile)
 {
    int           fail = 0;
+   int           reading_error = 0;
    struct passwd *pw = NULL;
    struct group  *gr = NULL;
 
@@ -915,29 +978,76 @@ static void sanity(const char *confFile)
       lst_Position p;
       dictDatabase *e;
       LST_ITERATE(DictConfig->dbl, p, e) {
-           if (e->indexFilename && access(e->indexFilename, R_OK)) {
-              log_info(":E: %s is not readable (index file)\n",
-                       e->indexFilename);
-              ++fail;
-           }
-           if (e->dataFilename && access(e->dataFilename, R_OK)) {
-              log_info(":E: %s is not readable (data file)\n",
-                       e->dataFilename);
-              ++fail;
-           }
-       }
+	 if (e->indexFilename && access(e->indexFilename, R_OK)) {
+	    log_info(":E: %s is not readable (index file)\n",
+		     e->indexFilename);
+	    ++fail;
+	    reading_error = 1;
+	 }
+	 if (e->indexsuffixFilename && access(e->indexsuffixFilename, R_OK)) {
+	    log_info(":E: %s is not readable (index_suffix file)\n",
+		     e->indexsuffixFilename);
+	    ++fail;
+	    reading_error = 1;
+	 }
+	 if (e->indexwordFilename && access(e->indexwordFilename, R_OK)) {
+	    log_info(":E: %s is not readable (index_word file)\n",
+		     e->indexwordFilename);
+	    ++fail;
+	    reading_error = 1;
+	 }
+	 if (e->dataFilename && access(e->dataFilename, R_OK)) {
+	    log_info(":E: %s is not readable (data file)\n",
+		     e->dataFilename);
+	    ++fail;
+	    reading_error = 1;
+	 }
+	 if (e->virtual_db && !e->database_list){
+	    log_info(
+	       ":E: database list is not specified for virtual dictionary '%s'\n",
+	       e->databaseName);
+	    ++fail;
+	 }
+	 if (e->normal_db && !e->dataFilename){
+	    log_info(
+	       ":E: data filename is not specified for dictionary '%s'\n",
+	       e->databaseName);
+	    ++fail;
+	 }
+	 if (e->normal_db && !e->indexFilename){
+	    log_info(
+	       ":E: index filename is not specified for dictionary '%s'\n",
+	       e->databaseName);
+	    ++fail;
+	 }
+	 if (e->plugin_db && !e->pluginFilename){
+	    log_info(
+	       ":E: plugin filename is not specified for dictionary '%s'\n",
+	       e->databaseName);
+	    ++fail;
+	 }
+#ifndef USE_PLUGIN
+	 if (e -> plugin_db){
+	    log_info (
+	       ":E: plugin support was disabled at compile time\n");
+	    ++fail;
+	 }
+#endif
+      }
    }
    if (fail) {
-      pw = getpwuid (geteuid ());
-      gr = getgrgid (getegid ());
+      if (reading_error){
+	 pw = getpwuid (geteuid ());
+	 gr = getgrgid (getegid ());
 
-      log_info(":E: for security, this program will not run as root.\n");
-      log_info(":E: if started as root, this program will change"
-               " to \"dictd\" or \"nobody\".\n");
-      log_info(":E: currently running as user %d/%s, group %d/%s\n",
-               geteuid(), pw && pw->pw_name ? pw->pw_name : "?",
-               getegid(), gr && gr->gr_name ? gr->gr_name : "?");
-      log_info(":E: config and db files must be readable by that user\n");
+	 log_info(":E: for security, this program will not run as root.\n");
+	 log_info(":E: if started as root, this program will change"
+		  " to \"dictd\" or \"nobody\".\n");
+	 log_info(":E: currently running as user %d/%s, group %d/%s\n",
+		  geteuid(), pw && pw->pw_name ? pw->pw_name : "?",
+		  getegid(), gr && gr->gr_name ? gr->gr_name : "?");
+	 log_info(":E: config and db files must be readable by that user\n");
+      }
       err_fatal(__FUNCTION__, ":E: terminating due to errors\n");
    }
 }
@@ -971,6 +1081,7 @@ static void init (const char *fn)
 {
    maa_init (fn);
    dict_ltdl_init ();
+   dict_init_strategies ();
 }
 
 static void destroy ()
@@ -982,6 +1093,7 @@ static void destroy ()
    src_destroy ();
    str_destroy ();
    dict_ltdl_close ();
+   dict_destroy_strategies ();
 }
 
 static void dict_make_dbs_available (dictConfig *cfg)
@@ -1005,10 +1117,11 @@ static void dict_test (
 {
    lst_List l;
    int count = 0;
+   int db_found = 0;
 
    l = lst_create ();
 
-   count = dict_search_databases (l, NULL, database_arg, word, strategy);
+   count = dict_search_databases (l, NULL, database_arg, word, strategy, &db_found);
 
    if (!nooutput_mode){
       if (count != 0){
@@ -1021,36 +1134,8 @@ static void dict_test (
    dict_destroy_list (l);
 }
 
-static const char *       without_strategy_arg = NULL;
-static dictStrategy *     without_strategy = (dictStrategy *) 1;
-
-static void disable_strategy (const char *strategies)
-{
-   char buffer [400];
-   int  i;
-   int  len = strlen (strategies);
-
-   if (len >= sizeof (buffer))
-      len = sizeof (buffer) - 1;
-
-   strncpy (buffer, strategies, len);
-   buffer [len] = '\0';
-
-   for (i = 0; i < len; ++i){
-      if (',' == buffer [i])
-	 buffer [i] = '\0';
-   }
-   for (i = 0; i < len; ){
-      without_strategy_arg = buffer + i;
-      i += strlen (without_strategy_arg) + 1;
-      without_strategy = lookup_strat (without_strategy_arg);
-      if (without_strategy){
-	 without_strategy -> number = -1;
-      }else{
-	 break;
-      }
-   }
-}
+//static const char *       without_strategy_arg = NULL;
+//static dictStrategy *     without_strategy = (dictStrategy *) 1;
 
 int main( int argc, char **argv, char **envp )
 {
@@ -1075,9 +1160,12 @@ int main( int argc, char **argv, char **envp )
    int                i;
 
    const char *       strategy_arg = "exact";
-   int                strategy = lookup_strategy (strategy_arg);
+   int                strategy     = DICT_EXACT;
 
    const char *       default_strategy_arg = "???";
+
+   char *             new_strategy;
+   char *             new_strategy_descr;
 
    struct option      longopts[]   = {
       { "verbose",  0, 0, 'v' },
@@ -1110,10 +1198,12 @@ int main( int argc, char **argv, char **envp )
       { "without-strategy", 1, 0, 513 },
       { "test-nooutput",    0, 0, 514 },
       { "test-idle",        0, 0, 515 },
+      { "add-strategy",     1, 0, 516 },
       { 0,                  0, 0, 0  }
    };
 
    release_root_privileges();
+
    init(argv[0]);
 
    flg_register( LOG_SERVER,    "server" );
@@ -1182,7 +1272,7 @@ int main( int argc, char **argv, char **envp )
 	 match_mode = 1;
 	 break;
       case 513:
-	 disable_strategy (optarg);
+	 dict_disable_strategies (optarg);
 	 break;
       case 514:
 	 nooutput_mode = 1;
@@ -1190,21 +1280,34 @@ int main( int argc, char **argv, char **envp )
       case 515:
 	 idle_mode = 1;
 	 break;
+      case 516:
+	 new_strategy = optarg;
+	 new_strategy_descr = strchr (new_strategy, ':');
+	 if (!new_strategy_descr){
+	    fprintf (stderr, "missing ':' symbol in --add-strategy option\n");
+	    exit (1);
+	 }
+
+	 *new_strategy_descr++ = 0;
+
+	 dict_add_strategy (new_strategy, new_strategy_descr);
+
+	 break;
       case 'h':
       default:  help(); exit(0);                          break;
       }
 
    if (
       -1 == strategy ||
-      (strategy_arg = without_strategy_arg, NULL == without_strategy) ||
+//      (strategy_arg = without_strategy_arg, NULL == without_strategy) ||
       (strategy_arg = default_strategy_arg, -1 == default_strategy))
    {
       fprintf (stderr, "%s is not a valid search strategy\n", strategy_arg);
       fprintf (stderr, "available ones are:\n");
-      for (i = 0; i < get_strategies_count (); ++i){
+      for (i = 0; i < get_strategy_count (); ++i){
 	  fprintf (
 	      stderr, "  %15s : %s\n",
-	      get_strategies () [i].name, get_strategies () [i].description);
+	      get_strategies () [i] -> name, get_strategies () [i] -> description);
       }
       exit (1);
    }

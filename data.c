@@ -17,7 +17,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: data.c,v 1.17 2003/01/03 19:43:36 cheusov Exp $
+ * $Id: data.c,v 1.20 2003/03/04 12:31:38 cheusov Exp $
  * 
  */
 
@@ -245,10 +245,10 @@ dictData *dict_data_open( const char *filename, int computeCRC )
    
    if ((h->fd = open( filename, O_RDONLY )) < 0)
       err_fatal_errno( __FUNCTION__,
-		       "Cannot open index file \"%s\"\n", filename );
+		       "Cannot open data file \"%s\"\n", filename );
    if (fstat( h->fd, &sb ))
       err_fatal_errno( __FUNCTION__,
-		       "Cannot stat index file \"%s\"\n", filename );
+		       "Cannot stat data file \"%s\"\n", filename );
    h->size = sb.st_size;
 
    if (mmap_mode){
@@ -257,7 +257,7 @@ dictData *dict_data_open( const char *filename, int computeCRC )
       if ((void *)h->start == (void *)(-1))
 	 err_fatal_errno(
 	    __FUNCTION__,
-	    "Cannot mmap data file \"%s\"\b", filename );
+	    "Cannot mmap data file \"%s\"\n", filename );
 #else
       err_fatal (__FUNCTION__, "This should not happen");
 #endif
@@ -266,7 +266,7 @@ dictData *dict_data_open( const char *filename, int computeCRC )
       if (-1 == read (h->fd, (char *) h->start, h->size))
 	 err_fatal_errno (
 	    __FUNCTION__,
-	    "Cannot read data file \"%s\"\b", filename );
+	    "Cannot read data file \"%s\"\n", filename );
 
       close (h -> fd);
       h -> fd = 0;
@@ -331,6 +331,9 @@ char *dict_data_obtain (const dictDatabase *db, const dictWord *dw)
    char *word_copy;
    int len;
 
+   if (!dw)
+      return NULL;
+
    if (dw -> def){
       if (-1 == dw -> def_size){
 	 len = strlen (dw -> def);
@@ -345,6 +348,9 @@ char *dict_data_obtain (const dictDatabase *db, const dictWord *dw)
 
       return word_copy;
    }else{
+      assert (db);
+      assert (db -> data);
+
       return dict_data_read_ (
 	 db -> data, dw -> start, dw -> end,
 	 db->prefilter, db->postfilter);

@@ -67,7 +67,6 @@
 #define DICT_FLAG_ALLCHARS       DICT_ENTRY_PREFIX"-allchars"
 #define DICT_FLAG_VIRTUAL        DICT_ENTRY_PREFIX"-virtual"
 
-#define DICT_DEFAULT_STRATEGY    DICT_LEVENSHTEIN
 
 				/* End of configurable things */
 
@@ -116,12 +115,6 @@
 #define DICT_DZIP       3
 
 #define DICT_CACHE_SIZE 5
-
-typedef struct dictStrategy {
-   const char *name;
-   const char *description;
-   int        number;
-} dictStrategy;
 
 typedef struct dictCache {
    int           chunk;
@@ -188,15 +181,13 @@ typedef struct dictIndex {
    int    flag_8bit;         /* not zero if it has 00-database-8bit entry*/
    int    flag_allchars;     /* not zero if it has 00-database-allchars entry*/
 
-   dictPlugin    *plugin;
-
    const int     *isspacealnum;
 } dictIndex;
 
 typedef struct dictDatabase {
    const char *databaseName;
    const char *databaseShort;
-   const char *databaseInfoPointer;
+   const char *databaseInfo;
    const char *dataFilename;
    const char *indexFilename;
    const char *indexsuffixFilename;
@@ -213,6 +204,22 @@ typedef struct dictDatabase {
    dictIndex  *index_word;
 
    lst_List   *virtual_db_list;
+
+   int invisible;    /* non-zero for invisible databases */
+
+   int exit_db;      /* non-zero for dictionary_exit entry */
+   int virtual_db;   /* non-zero for virtual databases */
+   int plugin_db;    /* non-zero for plugin entry */
+   int normal_db;    /* non-zero for normal database */
+
+   /* database_virtual members */
+   const char *database_list;  /* comma-separated list of database names */
+
+   /* database_plugin members */
+   const char *pluginFilename;
+   const char *plugin_data;    /* data for initializing plugin */
+   dictPlugin *plugin;
+
 } dictDatabase;
 
 #define DICT_DENY     0
@@ -237,13 +244,14 @@ typedef struct dictConfig {
 
 typedef struct dictWord {
    const dictDatabase  *database;
+   const dictDatabase  *database_visible;
 
    char    *word;
 
    unsigned long start;
    unsigned long end;
 
-/* Used for plugins */
+/* Used by plugins */
    const char    *def;
    int            def_size;
 } dictWord;
@@ -273,11 +281,7 @@ extern int   dict_data_filter(
    char *buffer, int *len, int maxLength,
    const char *filter );
 
-extern int get_strategies_count (void);
-extern const dictStrategy *get_strategies (void);
-extern dictStrategy * lookup_strat( const char *strategy );
-extern int lookup_strategy( const char *strategy );
-
+/**/
 extern const char *dict_index_search( const char *word, dictIndex *idx );
 extern int         dict_search (
    lst_List l,
@@ -289,7 +293,8 @@ extern int         dict_search (
 extern int dict_search_databases (
    lst_List *l,
    lst_Position db_pos,
-   const char *databaseName, const char *word, int strategy);
+   const char *databaseName, const char *word, int strategy,
+   int *db_found);
 
 extern dictIndex  *dict_index_open(
    const char *filename,
@@ -302,9 +307,8 @@ extern void       dict_destroy_list( lst_List list );
 extern int        dict_destroy_datum( const void *datum );
 
 #ifdef USE_PLUGIN
-extern int        dict_plugin_open (
-   dictIndex *i, const dictDatabase *db);
-extern void       dict_plugin_close (dictIndex *i);
+extern int        dict_plugin_open (dictDatabase *db);
+extern void       dict_plugin_close (dictDatabase *db);
 #endif
 
 /* dictd.c */
@@ -335,9 +339,6 @@ extern const char *postprocess_plugin_filename (const char *fn);
 extern int  dict_daemon( int s, struct sockaddr_in *csin, char ***argv0,
 			 int delay, int error );
 extern void daemon_terminate( int sig, const char *name );
-extern int get_strategies_count ();
-extern const dictStrategy *get_strategies ();
-extern int lookup_strategy( const char *strategy );
 
 /* */
 extern int        utf8_mode;

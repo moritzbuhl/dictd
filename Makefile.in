@@ -17,7 +17,7 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 675 Mass Ave, Cambridge, MA 02139, USA.
 # 
-# $Id: Makefile.in,v 1.65 2003/02/07 18:53:17 cheusov Exp $
+# $Id: Makefile.in,v 1.68 2003/03/03 19:14:35 cheusov Exp $
 #
 
 # Add a _letter_ if you change the version number and release your own version.
@@ -103,7 +103,7 @@ HEADERS= 	./config.h @XTRAHEADERS@ dictzip.h dictd.h dict.h \
                 codes.h md5.h
 
 SRCHOBJS=       index.o data.o dictdplugin.o
-NETOBJS=        daemon.o net.o servscan.o servparse.o md5.o
+NETOBJS=        daemon.o strategy.o net.o servscan.o servparse.o md5.o
 CLIOBJS=        net.o clientscan.o clientparse.o md5.o
 
 TMPS=           servscan.c servparse.c servparse.h \
@@ -154,8 +154,9 @@ lib%.a : %.o
 .PHONY: plugins
 plugins: $(PLUGINS)
 
-man_popen.dict : dictdplugin-config dictfmt_plugin
-	{ \
+man_popen.dict : dictdplugin-config dictfmt_plugin dictfmt
+	PATH=`pwd`:$${PATH}; export PATH;  \
+   { \
       echo `./dictdplugin-config --plugindir`'/search_man'; \
       echo "qwertyuioplkjhgfdsazxcvbnm 0987654321QWERTYUIOPLKJHGFDSAZXCVBNM"; \
    } | ./dictfmt_plugin dictdplugin_popen.so -s \
@@ -340,20 +341,18 @@ ChangeLog:
 	> ChangeLog;)
 
 
-dist: ChangeLog
+dist:
 	@( CVSROOT=`cat CVS/Root`; \
 	export CVSROOT; \
 	VERSION=$(DICT_VERSION) ; \
-	export VERSION; \
-	echo "***** Copying ChangeLog for dictd-$${VERSION}..."; \
-	cp ChangeLog /tmp; \
+	VERSION_CVS=`echo $${VERSION} | tr . -`; \
+	export VERSION VERSION_CVS; \
 	echo "***** Exporting files for dictd-$${VERSION}..."; \
 	cd /tmp; \
 	rm -rf /tmp/dictd-$${VERSION}; \
-	cvs export -fd dictd-$${VERSION} -r HEAD dictd1; \
+	cvs export -fd dictd-$${VERSION} -r dictd-$${VERSION_CVS} dictd1; \
 	cd dictd-$${VERSION}; \
 	make -f Makefile.conf; \
-	mv ../ChangeLog .; \
 	chmod -R a+rX,g-w .; \
 	cd ..; \
 	echo "***** Taring and zipping dictd-$${VERSION}.tar.gz..."; \

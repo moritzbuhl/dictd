@@ -227,6 +227,10 @@ Set the default strategy for MATCH search type. The default is 'lev'.
 Disable specified strategies.
 By default all search strategies are enabled.
 .TP
+.BI \-\-add-strategy " strat:descr"
+Adds strategy 'strat' with the description 'descr'.
+A new search strategy may be implemented with a help of plugins.
+.TP
 .B \-\-no-mmap
 do not use the mmap() function and read entire files into memory instead. 
 .TP
@@ -424,9 +428,10 @@ deny, group, database, data, index, filter, prefilter, postfilter, name,
 include, user, authonly, site.  Keywords are case sensitive.  String
 arguments that contain spaces should be surrounded by double quotes.
 Without quoting, strings may contain alphanumeric characters and _, -,
-., and *, but not spaces.  Strings must be on a single line and cannot
-be continued between lines.  Comments start with # and extend to the end
-of the line.
+ ., and *, but not spaces. Strings can
+be continued between lines. \\", \\\\, \\n, \\<NL> are treated as
+double quote, backslash, new line and no symbol respectively.
+Comments start with # and extend to the end of the line.
 .TP
 .B Site Section
 .RS
@@ -450,7 +455,7 @@ Per-database control is specified in the Database Section.
 .RS
 .TP
 .BI database " string " "{ " "database specification " "}"
-This section is required.  The string specifies the name of the database
+The string specifies the name of the database
 (e.g., wn or web1913).  (This is an arbitrary name selected by the
 administrator, and is not necessarily related to the file name or any
 name listed in the data file.  A short, easy to type name is often
@@ -460,6 +465,14 @@ selected for easy use with
 .B NOTE:
 If the files specified in the database specification do not exist on the
 system, dictd may silently fail.
+.TP
+.BI database_virtual " string " "{ " "virtual database specification " "}"
+This section specifies the virtual database.
+The string specifies the name of the database (e.g., en-ru or fren).
+.TP
+.BI database_plugin " string " "{ " "plugin specification " "}"
+This section specifies the plugin.
+The string specifies the name of the database.
 .TP
 .BI database_exit
 Excludes following databases from the '*' database.
@@ -593,6 +606,76 @@ dictionary to find the short name of the database.  The default is
 "@00-database-short", but this may be changed in the
 .I dictd.h
 file at compile time (DICT_SHORT_ENTRY_NAME).
+.TP
+.BI info " string"
+Specifies the information about database.  If the
+string begins with @, then it specifies the headword to look up in the
+dictionary to find information.  The default is
+"@00-database-info", but this may be changed in the
+.I dictd.h
+file at compile time (DICT_INFO_ENTRY_NAME).
+.TP
+.BI invisible
+Makes dictionary invisible to the clients i.e. this dictionary
+will not be recognized or shown by DEFINE, MATCH, SHOW INFO, SHOW SERVER and
+SHOW DB commands. If some definitions or matches are found in invisible
+dictionary,
+the name of the upper visible virtual dictionary or '*' is returned.
+.B NOTE:
+There is no sense to make dictionary invisible unless it is included
+to the virtual dictionary.
+.RE
+.TP
+.B Virtual Database Specification
+.RS
+The virtual database specification describes the virtual database:
+.TP
+.BI database_list " string"
+Specifies a list of databases which are included into the virtual database.
+Database names are in the string and are separated by comma.
+.TP
+.BI name " string"
+Specifies the short name of the database. String beginning with '@' symbol
+is not treated as an entry name.
+.TP
+.BI info " string"
+Specifies the information about database.  String beginning with '@' symbol
+is not treated as an entry name.
+.TP
+.BI invisible
+Makes dictionary invisible to the clients. See
+.I database specification
+.TP
+.B NOTE:
+Another way to implement a virtual database is to create
+database files by dictfmt_virtual executable
+.RE
+.TP
+.B Plugin Specification
+.RS
+.TP
+.BI plugin " string"
+Specifies a filename of the plugin.
+.TP
+.BI data " string"
+Specifies data for initializing plugin.
+.TP
+.BI name " string"
+Specifies the short name of the database. See
+.I database specification
+.TP
+.BI info " string"
+Specifies the information about database. See
+.I database specification
+.TP
+.BI invisible
+Makes dictionary invisible to the clients. See
+.I database specification
+.TP
+.B NOTE:
+Another way to configure plugin is to create
+database files by dictfmt_plugin executable
+.RE
 .TP
 .BI include " string"
 The text of the file "string" (usually a database specification)
@@ -850,6 +933,8 @@ so databases cannot be added or deleted on the fly.
 .br
 .I /usr/sbin/dictd
 .SH "SEE ALSO"
+.BR dictfmt (1),
+.BR dictfmt_virtual (1),
 .BR dict (1),
 .BR dictzip (1),
 .BR gunzip (1),

@@ -17,16 +17,18 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: daemon.c,v 1.48 2003/01/19 17:26:44 cheusov Exp $
+ * $Id: daemon.c,v 1.60 2003/03/03 17:24:26 cheusov Exp $
  * 
  */
 
 #include "dictd.h"
 #include <ctype.h>
 #include <setjmp.h>
+
 #include "md5.h"
 #include "regex.h"
 #include "dictdplugin.h"
+#include "strategy.h"
 
 #ifndef HAVE_INET_ATON
 #define inet_aton(a,b) (b)->s_addr = inet_addr(a)
@@ -40,7 +42,6 @@ extern int snprintf(char *str, size_t size, const char *format, ...);
 extern int vsnprintf(char *str, size_t size, const char *format, va_list ap);
 #endif
 
-int default_strategy  = DICT_DEFAULT_STRATEGY;
 
 static int          _dict_defines, _dict_matches;
 static int          daemonS;
@@ -95,67 +96,6 @@ static struct {
    { 1, {"q"},                  daemon_quit },
 };
 #define COMMANDS (sizeof(commandInfo)/sizeof(commandInfo[0]))
-
-static dictStrategy strategyInfo[] = {
-   {"exact",     "Match headwords exactly",                    DICT_EXACT },
-   {"prefix",    "Match prefixes",                             DICT_PREFIX },
-   {"substring", "Match substring occurring anywhere in a headword", DICT_SUBSTRING},
-   {"suffix",    "Match suffixes",                             DICT_SUFFIX},
-   {"re",        "POSIX 1003.2 (modern) regular expressions",  DICT_RE },
-   {"regexp",    "Old (basic) regular expressions",            DICT_REGEXP },
-   {"soundex",   "Match using SOUNDEX algorithm",              DICT_SOUNDEX },
-   {"lev", "Match headwords within Levenshtein distance one",  DICT_LEVENSHTEIN },
-   {"word", "Match separate words within headwords",           DICT_WORD },
-};
-#define STRATEGIES (sizeof(strategyInfo)/sizeof(strategyInfo[0]))
-
-int get_strategies_count (void)
-{
-   return STRATEGIES;
-}
-
-const dictStrategy *get_strategies (void)
-{
-   return strategyInfo;
-}
-
-static int lookup_strategy_index ( const char *strategy )
-{
-   int i;
-
-   for (i = 0; i < STRATEGIES; i++) {
-      if (
-	 !strcasecmp (strategy, strategyInfo[i].name) &&
-	 strategyInfo [i].number >= 0)
-      {
-         return i;
-      }
-   }
-
-   return -1;
-}
-
-int lookup_strategy( const char *strategy )
-{
-   int idx;
-   if (strategy[0] == '.' && strategy[1] == '\0')
-      return default_strategy;
-
-   idx = lookup_strategy_index (strategy);
-   if (-1 == idx)
-      return -1;
-   else
-      return strategyInfo [idx].number;
-}
-
-dictStrategy * lookup_strat( const char *strategy )
-{
-   int idx = lookup_strategy_index (strategy);
-   if (-1 == idx)
-      return NULL;
-   else
-      return strategyInfo + idx;
-}
 
 static void *(lookup_command)( int argc, char **argv )
 {
@@ -295,8 +235,8 @@ static int daemon_check_mask(const char *spec, const char *ip)
    
    bitmask = daemon_compute_mask(bits);
    if ((ntohl(target.s_addr) & bitmask) == (ntohl(mask.s_addr) & bitmask)) {
-       PRINTF(DBG_AUTH, ("%s matches %s/%d\n", tstring, mstring, bits));
-       return DICT_MATCH;
+      PRINTF(DBG_AUTH, ("%s matches %s/%d\n", tstring, mstring, bits));
+      return DICT_MATCH;
    }
    PRINTF(DBG_AUTH, ("%s does NOT match %s/%d\n", tstring, mstring, bits));
    return DICT_NOMATCH;
@@ -653,11 +593,17 @@ static void daemon_dump_defs( lst_List list )
 
       buf = dict_data_obtain ( db, dw );
 
-      daemon_printf( "%d \"%s\" %s \"%s\"\n",
-		     CODE_DEFINITION_FOLLOWS,
-		     dw->word,
-		     db->databaseName,
-		     db->databaseShort );
+      if (dw -> database_visible){
+	 db = dw -> database_visible;
+      }
+
+      daemon_printf (
+	  "%d \"%s\" %s \"%s\"\n",
+	  CODE_DEFINITION_FOLLOWS,
+	  dw->word,
+	  db->invisible ? "*" : db->databaseName,
+	  db->invisible ? ""  : db->databaseShort);
+
       daemon_mime();
       daemon_text(buf);
       xfree( buf );
@@ -690,16 +636,26 @@ static void daemon_dump_matches( lst_List list )
    dictWord     *dw;
    const char   *prevword     = NULL;
    const dictDatabase *prevdb = NULL;
+   const dictDatabase *db     = NULL;
 
    daemon_mime();
    LST_ITERATE(list,p,dw) {
+      db = dw -> database;
+
       if (prevdb == dw->database && prevword && !strcmp(prevword,dw->word))
 	  continue;
 
       prevword = dw->word;
       prevdb   = dw->database;
 
-      daemon_printf( "%s \"%s\"\n", dw->database->databaseName, dw->word );
+      if (dw -> database_visible){
+	 db = dw -> database_visible;
+      }
+
+      daemon_printf (
+	  "%s \"%s\"\n",
+	  db -> invisible ? "*" : db -> databaseName,
+	  dw -> word );
    }
    daemon_printf( ".\n" );
 }
@@ -729,6 +685,7 @@ static void daemon_define( const char *cmdline, int argc, char **argv )
    char           *word;
    const char     *databaseName;
    int            extension = (argv[0][0] == 'd' && argv[0][1] == '\0');
+   int            db_found = 0;
 
    if (extension) {
       switch (argc) {
@@ -750,11 +707,12 @@ static void daemon_define( const char *cmdline, int argc, char **argv )
 
    matches = abs(dict_search_databases (
       list, NULL,
-      databaseName, word, DICT_EXACT));
+      databaseName, word, DICT_EXACT,
+      &db_found));
 
-   if (matches > 0) {
+   if (db_found && matches > 0) {
       int actual_matches = daemon_count_defs( list );
-      
+
       _dict_defines += actual_matches;
       daemon_log( DICT_LOG_DEFINE,
 		  "%s \"%s\" %d\n", databaseName, word, actual_matches);
@@ -767,7 +725,7 @@ static void daemon_define( const char *cmdline, int argc, char **argv )
       return;
    }
 
-   if (matches < 0) {
+   if (!db_found) {
       dict_destroy_list( list );
       daemon_printf( "%d invalid database, use SHOW DB for list\n",
 		     CODE_INVALID_DB );
@@ -789,6 +747,7 @@ static void daemon_match( const char *cmdline, int argc, char **argv )
    const char     *strategy;
    int            strategyNumber;
    int            extension = (argv[0][0] == 'm' && argv[0][1] == '\0');
+   int            db_found = 0;
 
    if (extension) {
       switch (argc) {
@@ -818,9 +777,10 @@ static void daemon_match( const char *cmdline, int argc, char **argv )
 
    matches = abs(dict_search_databases (
       list, NULL,
-      databaseName, word, strategyNumber | DICT_MATCH_MASK));
+      databaseName, word, strategyNumber | DICT_MATCH_MASK,
+      &db_found));
 
-   if (matches > 0) {
+   if (db_found && matches > 0) {
       int actual_matches = daemon_count_matches( list );
       
       _dict_matches += actual_matches;
@@ -835,7 +795,7 @@ static void daemon_match( const char *cmdline, int argc, char **argv )
       return;
    }
 
-   if (matches < 0) {
+   if (!db_found) {
       dict_destroy_list( list );
       daemon_printf( "%d invalid database, use SHOW DB for list\n",
 		     CODE_INVALID_DB );
@@ -861,7 +821,8 @@ static dictDatabase *next_database (
 
    assert (databasePosition);
 
-   if (!name) return NULL;
+   if (!name)
+      return NULL;
 
    if (*name == '*' || *name == '!') {
       if (*databasePosition) {
@@ -875,9 +836,11 @@ static dictDatabase *next_database (
       while (*databasePosition) {
          db = lst_get_position( *databasePosition );
 	 *databasePosition = lst_next_position( *databasePosition );
-         if (db && !strcmp(db->databaseName,name)) {
-	    if (db->available) return db;
-	    else               return NULL;
+         if (db && !strcmp(db -> databaseName,name) && !db -> invisible) {
+	    if (db->available)
+	       return db;
+	    else
+               return NULL;
 	 }
       }
       return NULL;
@@ -887,11 +850,15 @@ static dictDatabase *next_database (
 static int count_databases( void )
 {
    int count = 0;
+   const dictDatabase *db;
 
    lst_Position databasePosition = first_database_pos ();
 
-   while (next_database (&databasePosition, "*"))
-      ++count;
+   while (NULL != (db = next_database (&databasePosition, "*"))){
+      if (!db->invisible){
+	 ++count;
+      }
+   }
 
    return count;
 }
@@ -908,21 +875,109 @@ static void destroy_word_list (lst_List l)
    lst_destroy (l);
 }
 
+/*
+  Replaces invisible databases with db argument.
+ */
+static void replace_invisible_databases (
+   lst_Position *pos,
+   const dictDatabase *db)
+{
+   dictWord *dw;
+
+   while (pos){
+      dw = (dictWord *) lst_get_position (pos);
+
+      if (dw -> database && dw -> database -> invisible){
+	 dw -> database_visible = db;
+      }
+
+      pos = lst_next_position (pos);
+   }
+}
+
+/*
+  Search for all words in word_list in the database db
+ */
+static int dict_search_words (
+   lst_List *l,
+   lst_List word_list,
+   const dictDatabase *db,
+   int strategy,
+   int *error, int *result,
+   const dictPluginData **extra_result, int *extra_result_size)
+{
+   lst_Position word_list_pos;
+   int mc = 0;
+   int matches_count = 0;
+   const char *word;
+
+   int old_count = 0;
+   int db_found  = 0;
+
+   word_list_pos = lst_init_position (word_list);
+   while (word_list_pos){
+      word = lst_get_position (word_list_pos);
+
+      if (word){
+	 if (db -> virtual_db_list){
+	    assert (lst_init_position (db -> virtual_db_list));
+
+	    old_count = lst_length (l);
+
+	    matches_count = dict_search_databases (
+	       l, lst_init_position (db -> virtual_db_list),
+	       "*", word, strategy, &db_found);
+
+	    assert (db_found);
+
+	    if (matches_count > 0){
+	       replace_invisible_databases (
+		  lst_nth_position (l, old_count + 1),
+		  db);
+	    }
+	 }else{
+	    matches_count = dict_search (
+	       l, word, db, strategy,
+	       result, extra_result, extra_result_size);
+
+	    if (*result == DICT_PLUGIN_RESULT_PREPROCESS){
+	       assert (matches_count > 0);
+
+	       xfree (lst_get_position (word_list_pos));
+	       lst_set_position (word_list_pos, NULL);
+	    }
+	 }
+
+	 if (matches_count < 0){
+	    *error = 1;
+	    matches_count = abs (matches_count);
+	    mc += matches_count;
+	    break;
+	 }
+
+	 mc += matches_count;
+      }
+
+      word_list_pos = lst_next_position (word_list_pos);
+   }
+
+   return mc;
+}
+
 int dict_search_databases (
    lst_List *l,
    lst_Position databasePosition, /* NULL for global database list */
-   const char *databaseName, const char *word, int strategy)
+   const char *databaseName, const char *word, int strategy,
+   int *db_found)
 {
    int matches       = -1;
    int matches_count = 0;
-   int mc;
    int error         = 0;
 
-   dictDatabase *db;
+
+   const dictDatabase *db;
    dictWord *dw;
    char *p;
-
-   lst_Position preprocessed_words_pos;
 
    lst_List preprocessed_words;
    int i;
@@ -931,6 +986,8 @@ int dict_search_databases (
    const dictPluginData *extra_result;
    int                   extra_result_size;
 
+   *db_found = 0;
+
    if (!databasePosition)
       databasePosition = first_database_pos ();
 
@@ -938,50 +995,18 @@ int dict_search_databases (
    lst_append (preprocessed_words, xstrdup(word));
 
    while (!error && (db = next_database (&databasePosition, databaseName))) {
-      if (!db -> index)
-	 /* actually dictionary_exit */
+      if (db -> exit_db)
+	 /* dictionary_exit */
 	 break;
+
+      *db_found = 1;
 
       result = DICT_PLUGIN_RESULT_NOTFOUND;
 
-      mc = 0;
-      preprocessed_words_pos = lst_init_position (preprocessed_words);
-      while (preprocessed_words_pos){
-	 word = lst_get_position (preprocessed_words_pos);
-	 if (word){
-	    if (db -> virtual_db_list){
-	       assert (lst_init_position (db -> virtual_db_list));
-
-	       matches_count = dict_search_databases (
-		  l, lst_init_position (db -> virtual_db_list),
-		  "*", word, strategy);
-	    }else{
-	       matches_count = dict_search (
-		  l, word, db, strategy,
-		  &result, &extra_result, &extra_result_size);
-
-	       if (result == DICT_PLUGIN_RESULT_PREPROCESS){
-		  assert (matches_count > 0);
-
-		  xfree (lst_get_position (preprocessed_words_pos));
-		  lst_set_position (preprocessed_words_pos, NULL);
-	       }
-	    }
-
-	    if (matches_count < 0){
-	       error = 1;
-	       matches_count = abs (matches_count);
-	       mc += matches_count;
-	       break;
-	    }
-
-	    mc += matches_count;
-	 }
-
-	 preprocessed_words_pos = lst_next_position (preprocessed_words_pos);
-      }
-
-      matches_count = mc;
+      matches_count = dict_search_words (
+	 l,
+	 preprocessed_words, db, strategy,
+	 &error, &result, &extra_result, &extra_result_size);
 
       if (matches < 0)
 	 matches = 0;
@@ -1029,7 +1054,7 @@ int dict_search_databases (
 static void daemon_show_db( const char *cmdline, int argc, char **argv )
 {
    int          count;
-   dictDatabase *db;
+   const dictDatabase *db;
    
    lst_Position databasePosition;
 
@@ -1049,8 +1074,10 @@ static void daemon_show_db( const char *cmdline, int argc, char **argv )
 
       daemon_mime();
       while ((db = next_database(&databasePosition, "*"))) {
-	 daemon_printf( "%s \"%s\"\n",
-			db->databaseName, db->databaseShort );
+	 if (!db->invisible){
+	    daemon_printf( "%s \"%s\"\n",
+			   db->databaseName, db->databaseShort );
+	 }
       }
       daemon_printf( ".\n" );
       daemon_ok( CODE_OK, "ok", NULL );
@@ -1060,7 +1087,9 @@ static void daemon_show_db( const char *cmdline, int argc, char **argv )
 static void daemon_show_strat( const char *cmdline, int argc, char **argv )
 {
    int i;
-   int strategy_count;
+
+   int strat_count        = get_strategy_count ();
+   dictStrategy ** strats = get_strategies ();
 
    if (argc != 2) {
       daemon_printf( "%d syntax error, illegal parameters\n",
@@ -1068,22 +1097,16 @@ static void daemon_show_strat( const char *cmdline, int argc, char **argv )
       return;
    }
 
-   strategy_count = 0;
+   if (strat_count){
+      daemon_printf( "%d %d databases present\n",
+		     CODE_STRATEGY_LIST, strat_count );
+      daemon_mime();
 
-   for (i = 0; i < STRATEGIES; i++) {
-      if (strategyInfo[i].number >= 0){
-	 if (!strategy_count++){
-	    daemon_printf( "%d %d databases present\n",
-			   CODE_STRATEGY_LIST, STRATEGIES );
-	    daemon_mime();
-	 }
-
+      for (i = 0; i < strat_count; i++) {
 	 daemon_printf( "%s \"%s\"\n",
-			strategyInfo[i].name, strategyInfo[i].description );
+			strats [i] -> name, strats [i] -> description );
       }
-   }
 
-   if (strategy_count){
       daemon_printf( ".\n" );
       daemon_ok( CODE_OK, "ok", NULL );
    }else{
@@ -1095,9 +1118,10 @@ static void daemon_show_info( const char *cmdline, int argc, char **argv )
 {
    char         *buf;
    dictWord     *dw;
-   dictDatabase *db;
+   const dictDatabase *db;
    lst_List     list;
-   
+   const char  *info_entry_name = DICT_INFO_ENTRY_NAME;
+
    lst_Position databasePosition = first_database_pos ();
 
    if (argc != 3) {
@@ -1114,10 +1138,25 @@ static void daemon_show_info( const char *cmdline, int argc, char **argv )
 
    list = lst_create();
    while ((db = next_database(&databasePosition, argv[2] ))) {
+      if (
+	 db -> databaseInfo &&
+	 (db -> virtual_db || db -> databaseInfo [0] != '@'))
+      {
+	 daemon_printf( "%d information for %s\n",
+			CODE_DATABASE_INFO, argv[2] );
+	 daemon_mime();
+	 daemon_text(db -> databaseInfo);
+	 daemon_text("\n");
+	 daemon_ok( CODE_OK, "ok", NULL );
+	 return;
+      }
+
+      if (db -> databaseInfo && db -> databaseInfo [0] == '@')
+	 info_entry_name = db -> databaseInfo + 1;
+
       if (dict_search (
 	 list,
-	 db->databaseInfoPointer ?
-	 db->databaseInfoPointer : DICT_INFO_ENTRY_NAME,
+	 info_entry_name,
 	 db,
 	 DICT_EXACT,
 	 NULL, NULL, NULL))
@@ -1152,7 +1191,7 @@ static void daemon_show_server( const char *cmdline, int argc, char **argv )
 {
    FILE          *str;
    char          buffer[1024];
-   dictDatabase  *db;
+   const dictDatabase  *db;
    double        uptime;
    
    lst_Position databasePosition = first_database_pos ();
@@ -1183,6 +1222,9 @@ static void daemon_show_server( const char *cmdline, int argc, char **argv )
 	 char data_size_uom  = 'k';
 	 int data_length     = 0;
 	 char data_length_uom= 'k';
+
+	 if (db -> invisible)
+	    continue;
 
 	 if (db->index){
 	    index_size = db->index->size/1024 > 10240 ?
