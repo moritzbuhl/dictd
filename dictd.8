@@ -54,16 +54,19 @@ be run from
 .P
 Databases are distributed separately from the server.
 .P
+By default, 
 .B dictd
-assumes that the index files are sorted alphabeticaly.  By default, only
-alphanumeric characters are used for search.  This default may be
-overridden by a header in the data file.  The only such features
-implemented at this time are the headers "00-database-allchars" which
-tells
+assumes that the index files are sorted alphabetically, and only
+alphanumeric characters from the 7-bit ASCII character set are used
+for search.  This default may be overridden by a header in the data
+file.  The only such features implemented at this time are the headers
+"00-database-allchars" which tells
 .B dictd 
-that non-alphanumeric characters may also be used for search, and the
+that non-alphanumeric characters may also be used for search, the
 header "00-database-utf8" which indicates that the database uses utf8
-encoding. All headwords in the index file are sorted alphabetically.
+encoding, and the 00-database-8bit which indicates that the database
+is encoded and sorted according to a locale that uses an 8-bit
+encoding.
 .P
 A header "00-database-plugin" may also be present and is used for
 integrating plugins into dictd. See "dictfmt_plugin --help" and
@@ -143,6 +146,16 @@ Although, due to its rather large startup time, this daemon was not
 intended to run from inetd, with a fast processor it is feasible to do
 so. This option also implies \-\-fast-start.
 .TP
+.BI \-\-pp " prog"
+Sets a preprocessor for configuarion file.
+like
+.I " m4"
+or
+.I " cpp".
+See example_complex.conf file
+from distribution. By default configuration file is parsed without
+preprocessor.
+.TP
 .BI \-\-depth " length"
 Specify the queue length for
 .BR listen (2).
@@ -204,6 +217,15 @@ for both 8-bit and UTF-8 formats. If locale contains utf8 or utf-8
 substring, UTF-8 format is expected.
 Note that if your database is not in ASCII7 or UTF-8 format,
 then the dictd server will not be compliant to RFC 2229.
+.TP
+.BI NOTE 
+If utf-8 or 8-bit dictionaries are included in the configuration file,
+and the appropriate --locale has not been specified,
+.B dictd
+will failt to start.  This implies that
+.B dictd 
+will not run with both utf-8 and 8-bit dictionaries in the
+configuration file.
 .TP
 .B \-s
 Log using the
@@ -643,6 +665,13 @@ the name of the upper visible virtual dictionary or '*' is returned.
 .B NOTE:
 There is no sense to make dictionary invisible unless it is included
 to the virtual dictionary.
+.TP
+.BI disable_strategy " string"
+Disables the specified strategy for database.
+This may be useful for slow dictionaries (plugins)
+or for dictionaries included to virtual ones.
+For an example see file example_complex.conf.
+
 .RE
 .TP
 .B Virtual Database Specification
@@ -654,15 +683,20 @@ Specifies a list of databases which are included into the virtual database.
 Database names are in the string and are separated by comma.
 .TP
 .BI name " string"
-Specifies the short name of the database. String beginning with '@' symbol
-is not treated as an entry name.
+Specifies the short name of the database. See
+.I database specification
 .TP
 .BI info " string"
-Specifies the information about database.  String beginning with '@' symbol
-is not treated as an entry name.
+Specifies the information about database. See
+.I database specification
 .TP
 .BI invisible
 Makes dictionary invisible to the clients. See
+.I database specification
+.TP
+.BI disable_strategy " string"
+Disables the specified strategy for database.
+See
 .I database specification
 .TP
 .B NOTE:
@@ -680,15 +714,23 @@ Specifies a filename of the plugin.
 Specifies data for initializing plugin.
 .TP
 .BI name " string"
-Specifies the short name of the database. See
+Specifies the short name of the database.
+See
 .I database specification
 .TP
 .BI info " string"
-Specifies the information about database. See
+Specifies the information about database.
+See
 .I database specification
 .TP
 .BI invisible
-Makes dictionary invisible to the clients. See
+Makes dictionary invisible to the clients.
+See
+.I database specification
+.TP
+.BI disable_strategy " string"
+Disables the specified strategy for database.
+See
 .I database specification
 .TP
 .B NOTE:
@@ -928,7 +970,7 @@ The main source files for the
 .B dictd
 server and the
 .B dictzip
-compression program were written by Rik Faith (faith@dict) and are
+compression program were written by Rik Faith (faith@dict.org) and are
 distributed under the terms of the GNU General Public License.  If you need
 to distribute under other terms, write to the author.
 .P
@@ -943,11 +985,11 @@ non-alphanumeric characters as do the other searches.  In practice, this
 isn't much of a problem.
 
 The 'lev' strategy doesn't work with utf8 dictionaries.
-
+.SH "WARNINGS"
 Conformance of regular expressions
 (used by 're' and 'regexp' search strategies)
 to ERE and BRE depends on
-what library you build dictd with.
+library you build dictd with.
 
 Whether 're' and 'regex' strategies support utf8 depends on 
 library you build dictd with.

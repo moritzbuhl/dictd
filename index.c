@@ -17,7 +17,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: index.c,v 1.69 2003/07/15 10:55:57 cheusov Exp $
+ * $Id: index.c,v 1.82 2003/11/26 14:47:35 cheusov Exp $
  * 
  */
 
@@ -99,73 +99,6 @@ static int dict_table_init_compare_utf8 (const void *a, const void *b)
 
     return c1 - c2;
 }
-
-/*
-  Copies alphanumeric and space characters converting them to lower case.
-  Strings are represented in 8-bit character set.
-*/
-static int tolower_alnumspace_8bit (
-   const char *src, char *dest,
-   int allchars_mode)
-{
-   int c;
-
-   for (; *src; ++src) {
-      c = * (const unsigned char *) src;
-
-      if (isspace( c )) {
-         *dest++ = ' ';
-      }else if (allchars_mode || isalnum( c )){
-	 *dest++ = tolower (c);
-      }
-   }
-
-   *dest = '\0';
-   return 1;
-}
-
-#if HAVE_UTF8
-/*
-  Copies alphanumeric and space characters converting them to lower case.
-  Strings are represented in UTF-8 character set.
-*/
-static int tolower_alnumspace_utf8 (
-   const char *src, char *dest,
-   int allchars_mode)
-{
-   wchar_t      ucs4_char;
-   size_t len;
-   int    len2;
-
-   mbstate_t ps;
-   mbstate_t ps2;
-
-   memset (&ps,  0, sizeof (ps));
-   memset (&ps2, 0, sizeof (ps2));
-
-   while (src && src [0]){
-      len = mbrtowc (&ucs4_char, src, MB_CUR_MAX, &ps);
-      if ((int) len < 0)
-	 return 0;
-
-      if (iswspace (ucs4_char)){
-	 *dest++ = ' ';
-      }else if (allchars_mode || iswalnum (ucs4_char)){
-	 len2 = wcrtomb (dest, towlower (ucs4_char), &ps2);
-	 if (len2 < 0)
-	    return 0;
-
-	 dest += len2;
-      }
-
-      src += len;
-   }
-
-   *dest = 0;
-
-   return (src != NULL);
-}
-#endif
 
 static void dict_table_init(void)
 {
@@ -337,9 +270,16 @@ static int compare_alnumspace(
 	 }
 	 if (dbg_test(DBG_SEARCH)){
 	    if (utf8_mode)
-	       printf("   result = %d (%i != %i) \n", result, c1, c2);
+	       printf(
+		  "   result = %d (%i != %i) \n", result, c1, c2);
 	    else
-	       printf("   result = %d ('%c' != '%c') \n", result, c1, c2);
+	       printf(
+		  "   result = %d ('%c'(c2i=%i) != '%c'(c2i=%i)) \n",
+		  result,
+		  c1,
+		  c2i (c1),
+		  c2,
+		  c2i (c2));
 	 }
          return result;
       }
@@ -393,8 +333,8 @@ static int compare(
       }
 
       *d = '\0';
-      printf( "compare \"%s\" with \"%s\" (sizes: %i and %i)\n",
-         word, buf, strlen( word ), strlen( buf ) );
+      printf( "compare \"%s\" with \"%s\" (sizes: %lu and %lu)\n",
+         word, buf, (unsigned long) strlen( word ), (unsigned long) strlen( buf ) );
    }
 
    ++_dict_comparisons;		/* counter for profiling */
@@ -452,7 +392,7 @@ static const char *binary_search_8bit(
 
    assert (dbindex);
 
-   PRINTF(DBG_SEARCH,("%s %p %p\n",word,start,end));
+   PRINTF(DBG_SEARCH,("word/start/end %s/%p/%p\n",word,start,end));
 
    pt = start + (end-start)/2;
    FIND_NEXT(pt,end);
@@ -466,8 +406,8 @@ static const char *binary_search_8bit(
 	 }
 
          *d = '\0';
-         printf( "compare \"%s\" with \"%s\" (sizes: %i and %i)\n",
-            word, buf, strlen( word ), strlen( buf ) );
+         printf( "compare \"%s\" with \"%s\" (sizes: %lu and %lu)\n",
+            word, buf, (unsigned long) strlen( word ), (unsigned long) strlen( buf ) );
       }
 
       if (
@@ -612,8 +552,8 @@ static dictWord *dict_word_create(
 		    "Too few tabs in index entry \"%20.20s\"\n", entry );
 
    buf = alloca( newline + 1 );
-   strncpy( buf, entry, newline );
-   buf[firstTab] = buf[secondTab] = buf[newline] = '\0';
+   memcpy (buf, entry, newline);
+   buf[firstTab] = buf[secondTab] = buf [newline] = '\0';
 
    dw->start    = b64_decode( buf + firstTab + 1 );
    dw->end      = b64_decode( buf + secondTab + 1 );
@@ -1120,7 +1060,8 @@ static int dict_search_soundex( lst_List l,
    const char *end;
    int        count = 0;
    dictWord   *datum;
-   char       soundex[10];
+   char       soundex  [10];
+   char       soundex2 [5];
    char       buffer[MAXWORDLEN];
    char       *d;
    const unsigned char *s;
@@ -1140,7 +1081,7 @@ static int dict_search_soundex( lst_List l,
       end = dbindex->end;
    }
 
-   strcpy( soundex, txt_soundex( word ) );
+   txt_soundex2 (word, soundex);
 
    while (pt && pt < end) {
       for (i = 0, s = pt, d = buffer; i < MAXWORDLEN - 1; i++, ++s) {
@@ -1149,7 +1090,9 @@ static int dict_search_soundex( lst_List l,
 	 *d++ = *s;
       }
       *d = '\0';
-      if (!strcmp(soundex, txt_soundex(buffer))) {
+
+      txt_soundex2 (buffer, soundex2);
+      if (!strcmp (soundex, soundex2)) {
 	 if (!previous || altcompare(previous, pt, end)) {
 	    datum = dict_word_create( previous = pt, database, dbindex );
 	    lst_append( l, datum );
@@ -1253,10 +1196,12 @@ static int dict_search_levenshtein( lst_List l,
    strcpy( buf, word );
    for (i = 0; i < len; i++) {
       for (j = 0; j < charcount; j++) {
-	 tmp = buf [i];
-         buf[i] = c(j);
-	 CHECK;
-	 buf [i] = tmp;
+	 if (buf[i] != c(j)){
+	    tmp = buf [i];
+	    buf[i] = c(j);
+	    CHECK;
+	    buf [i] = tmp;
+	 }
       }
    }
 
@@ -1408,33 +1353,27 @@ int dict_search_database_ (
    buf = alloca( strlen( word ) + 1 );
 
 #if HAVE_UTF8
-   if (utf8_mode){
-      if (
-	 !strcmp(utf8_err_msg, word) ||
-	 !tolower_alnumspace_utf8 (
-	    word, buf, database -> index -> flag_allchars))
-      {
-	 PRINTF(DBG_SEARCH, ("tolower_... ERROR!!!\n"));
-
-	 dw = xmalloc (sizeof (dictWord));
-	 memset (dw, 0, sizeof (dictWord));
-
-	 dw -> database = database;
-	 dw -> def      = utf8_err_msg;
-	 dw -> def_size = -1;
-	 dw -> word     = strdup (word);
-
-	 lst_append (l, dw);
-
-	 return -1;
-      }
-   }else{
-      tolower_alnumspace_8bit (
-	  word, buf, database -> index -> flag_allchars);
+   if (
+      !strcmp(utf8_err_msg, word) ||
+      tolower_alnumspace (
+	 word, buf, database -> index -> flag_allchars, utf8_mode))
+   {
+      PRINTF(DBG_SEARCH, ("tolower_... ERROR!!!\n"));
+      
+      dw = xmalloc (sizeof (dictWord));
+      memset (dw, 0, sizeof (dictWord));
+      
+      dw -> database = database;
+      dw -> def      = utf8_err_msg;
+      dw -> def_size = -1;
+      dw -> word     = strdup (word);
+      
+      lst_append (l, dw);
+      
+      return -1;
    }
 #else
-   tolower_alnumspace_8bit (
-      word, buf, database -> index -> flag_allchars);
+   tolower_alnumspace (word, buf, database -> index -> flag_allchars, utf8_mode);
 #endif
 
    if (!buf [0] && word [0]){
@@ -1468,7 +1407,7 @@ int dict_search_database_ (
       return dict_search_substring( l, buf, database, database->index );
 
    case DICT_SUFFIX:
-      return dict_search_suffix( l, word, database );
+      return dict_search_suffix( l, buf, database );
 
    case DICT_RE:
       return dict_search_re( l, word, database, database->index );
@@ -1494,6 +1433,30 @@ int dict_search_database_ (
 }
 
 /*
+  Replaces invisible databases with db argument.
+ */
+static void replace_invisible_databases (
+   lst_Position pos,
+   const dictDatabase *db)
+{
+   dictWord *dw;
+
+   while (pos){
+      dw = (dictWord *) lst_get_position (pos);
+
+      if (
+	 dw -> database &&
+	 dw -> database -> invisible &&
+	 !dw -> database_visible)
+      {
+	 dw -> database_visible = db;
+      }
+
+      pos = lst_next_position (pos);
+   }
+}
+
+/*
   returns a number of matches ( >= 0 ) or
   negative value for invalid UTF-8 string
 */
@@ -1507,26 +1470,29 @@ int dict_search (
    int *extra_data_size)
 {
    int count = 0;
-#ifdef USE_PLUGIN
-   int res = 0;
-#endif
    dictWord *dw;
+
+   int norm_strategy = strategy & ~DICT_MATCH_MASK;
+
+   if (extra_result)
+      *extra_result = DICT_PLUGIN_RESULT_NOTFOUND;
 
    assert (word);
    assert (database);
 
-   if (!database -> index && !strcmp (word, DICT_INFO_ENTRY_NAME)){
-      dw = xmalloc (sizeof (dictWord));
-      memset (dw, 0, sizeof (dictWord));
-
-      dw -> database = database;
-      dw -> word     = strdup (word);
-      dw -> def      = database -> databaseShort;
-      dw -> def_size = -1;
-      lst_append (l, dw);
-      count = 1;
-
-   }else{
+   if (
+      database -> strategy_disabled &&
+      database -> strategy_disabled [norm_strategy])
+   {
+      /* disable_strategy keyword from configuration file */
+#if 0
+      PRINTF (DBG_SEARCH, (
+	 ":S: strategy '%s' is disabled for database '%s'\n",
+	 get_strategies () [norm_strategy] -> name,
+	 database -> databaseName ? database -> databaseName : "(unknown)"));
+#endif
+      return 0;
+   }
 
       PRINTF (DBG_SEARCH, (":S: Searching in '%s'\n", database -> databaseName));
 
@@ -1534,46 +1500,45 @@ int dict_search (
       fprintf (stderr, "STRATEGY: %x\n", strategy);
 #endif
 
+      if (database -> index){
+	 PRINTF (DBG_SEARCH, (":S:   database search\n"));
+	 count = dict_search_database_ (l, word, database, norm_strategy);
+      }
+
 #ifdef USE_PLUGIN
-      if (database -> plugin){
+      if (!count && database -> plugin){
 	 PRINTF (DBG_SEARCH, (":S:   plugin search\n"));
 	 count = dict_search_plugin (
 	    l, word, database, strategy,
-	    &res, extra_data, extra_data_size);
-
-	 if (extra_result)
-	    *extra_result = res;
+	    extra_result, extra_data, extra_data_size);
 
 	 if (count)
 	    return count;
-
-	 switch (res){
-	 case DICT_PLUGIN_RESULT_EXIT:
-	    return 0;
-	 case DICT_PLUGIN_RESULT_NOTFOUND:
-	    if (strncmp (word, DICT_ENTRY_PREFIX, DICT_ENTRY_PREFIX_LEN))
-	       return 0;
-	 default:
-	    break;
-	 }
       }
 #endif
 
-      if (database -> index){
-	 strategy &= ~DICT_MATCH_MASK;
+      if (!count && database -> virtual_db_list){
+	 lst_Position db_list_pos;
+	 dictDatabase *db = NULL;
+	 int old_count = lst_length (l);
 
-	 PRINTF (DBG_SEARCH, (":S:   database search\n"));
-	 count = dict_search_database_ (l, word, database, strategy);
-      }
-   }
+	 assert (lst_init_position (database -> virtual_db_list));
 
-   if (extra_result){
-      if (count != 0){
-	 *extra_result = DICT_PLUGIN_RESULT_FOUND;
-      }else{
-	 *extra_result = DICT_PLUGIN_RESULT_NOTFOUND;
+	 LST_ITERATE (database -> virtual_db_list, db_list_pos, db){
+	    count += dict_search (
+	       l, word, db, strategy,
+	       extra_result, extra_data, extra_data_size);
+	 }
+
+	 if (count > 0){
+	    replace_invisible_databases (
+	       lst_nth_position (l, old_count + 1),
+	       database);
+	 }
       }
-   }
+
+   if (count > 0 && extra_result)
+      *extra_result = DICT_PLUGIN_RESULT_FOUND;
 
    return count;
 }
@@ -1662,6 +1627,7 @@ dictIndex *dict_index_open(
       PRINTF(DBG_INIT, (":I:     \"%s\": flag_utf8=%i\n", filename, i->flag_utf8));
       if (i->flag_utf8 && !utf8_mode){
 	 fprintf (stderr, "locale '%s' can not be used for utf-8 dictionaries\n", locale);
+	 log_info( ":E: locale '%s' can not be used for utf-8 dictionaries. Exiting\n", locale );
 	 exit (1);
       }
 
@@ -1671,6 +1637,7 @@ dictIndex *dict_index_open(
       PRINTF(DBG_INIT, (":I:     \"%s\": flag_8bit=%i\n", filename, i->flag_8bit));
       if (i->flag_8bit && !bit8_mode){
 	 fprintf (stderr, "locale '%s' can not be used for 8-bit dictionaries\n", locale);
+	 log_info( ":E: locale '%s' can not be used for 8-bit dictionaries. Exiting\n", locale );
 	 exit (1);
       }
    }

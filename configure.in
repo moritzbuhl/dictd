@@ -18,7 +18,7 @@ dnl You should have received a copy of the GNU General Public License along
 dnl with this program; if not, write to the Free Software Foundation, Inc.,
 dnl 675 Mass Ave, Cambridge, MA 02139, USA.
 dnl
-dnl $Id: configure.in,v 1.53 2003/07/22 12:52:27 cheusov Exp $
+dnl $Id: configure.in,v 1.68 2003/12/08 18:28:04 cheusov Exp $
 dnl
 dnl Flag conventions:
 dnl     CFLAGS and LDFLAGS should be settable on the make commandline
@@ -32,11 +32,11 @@ dnl     YCFLAGS is for yacc
 dnl     LCFLAGS is for lex
 
 
-define(VERSION, 1.9.10)
+define(VERSION, 1.9.11)
 
 
 AC_PREREQ(2.53)
-AC_REVISION($Revision: 1.53 $)
+AC_REVISION($Revision: 1.68 $)
 
 AC_INIT([dict],[VERSION],["dict-beta@dict.org"])
 
@@ -210,13 +210,16 @@ fi
 
 AC_ARG_ENABLE([plugin],[  --disable-plugin        without plugin support])
 if test "x${enableval}" != xno; then
-    CFLAGS="$CFLAGS -DUSE_PLUGIN"
-    AC_CHECK_LIB(dl, dlopen,
-        [REALLIBS="$REALLIBS -ldl"; USE_PLUGIN=2],
-        AC_CHECK_LIB(ltdl,lt_dlopen,
-            [REALLIBS="$REALLIBS -lltdl"; USE_PLUGIN=1],
-            [AC_MSG_ERROR([Install ltdl library and appropriate header files
-                           or run ./configure --disable-plugin])]))
+    AC_CHECK_LIB(c, dlopen,
+        [USE_PLUGIN=2],
+        AC_CHECK_LIB(dl, dlopen,
+            [LIBS="$LIBS -ldl"; USE_PLUGIN=2],
+            AC_CHECK_LIB(ltdl,lt_dlopen,
+                [LIBS="$LIBS -lltdl"; USE_PLUGIN=1])))
+
+#                [AC_MSG_ERROR(
+#                    [Install ltdl library and appropriate header files
+#                           or run ./configure --disable-plugin])])))
 fi
 
 AC_ARG_ENABLE([dictorg],[  --enable-dictorg        use predefined dict servers])
@@ -272,7 +275,7 @@ if test "$local_libmaa" = 1; then
 fi
 
 if test "$local_zlib" = 0; then
-    AC_CHECK_LIB(z,zlibVersion,REALLIBS="$REALLIBS -lz",local_zlib=1)
+    AC_CHECK_LIB(z,zlibVersion,LIBS="$LIBS -lz",local_zlib=1)
 fi
 
 if test "$local_zlib" = 1; then
@@ -289,7 +292,9 @@ if test "$local_zlib" = 1; then
     fi
 fi
 
-AC_CHECK_LIB(c,regcomp,,local_regex=1)
+if test "$local_regex" = 0; then
+    AC_CHECK_LIB(c,regcomp,,local_regex=1)
+fi
 
 if test "$local_regex" = 1; then
     AC_MSG_CHECKING(for regex in local source tree)
@@ -305,8 +310,12 @@ if test "$local_regex" = 1; then
     fi
 fi
 
-AC_CHECK_LIB(socket,main,REALLIBS="$REALLIBS -lsocket")
-AC_CHECK_LIB(nsl,main,REALLIBS="$REALLIBS -lnsl")
+AC_CHECK_LIB(Judy, JudySLNext, [JUDYLIB=-lJudy])
+
+AC_CHECK_LIB(socket,main)
+AC_CHECK_LIB(c,inet_ntoa,
+	,
+	[AC_CHECK_LIB(nsl,inet_ntoa)])
 
 if test "$local_dmalloc" = 0 -a "$needs_dmalloc" = 1; then
     AC_CHECK_LIB(dmalloc,main,
@@ -341,30 +350,32 @@ AC_HEADER_TIME
 if test "x${USE_PLUGIN}" = "x2"; then
    # We use native dlopen
 
-   AC_CHECK_HEADERS(dlfcn.h,
-		[AC_DEFINE(HAVE_DLFCN_H, 1,
-			[Define if you have the <dlfcn.h> header file.])],
-			[AC_MSG_ERROR([Install dl library and appropriate header files
-                           or run ./configure --disable-plugin])])
+   AC_CHECK_HEADERS(dlfcn.h, [CFLAGS="$CFLAGS -DUSE_PLUGIN"], [USE_PLUGIN=])
+#		[AC_DEFINE(HAVE_DLFCN_H, 1,
+#			[Define if you have the <dlfcn.h> header file.])],
+#			[AC_MSG_ERROR([Install dl library and appropriate header files
+#                           or run ./configure --disable-plugin])])
 fi
 
 if test "x${USE_PLUGIN}" = "x1"; then
    # We use libltdl
 
-   AC_CHECK_HEADERS(ltdl.h,
-		[AC_DEFINE(HAVE_LTDL_H, 1,
-			[Define if you have the <ltdl.h> header file.])],
-			[AC_MSG_ERROR([Install ltdl library and appropriate header files
-                           or run ./configure --disable-plugin])])
+   AC_CHECK_HEADERS(ltdl.h, [CFLAGS="$CFLAGS -DUSE_PLUGIN"], [USE_PLUGIN=])
+#		[AC_DEFINE(HAVE_LTDL_H, 1,
+#			[Define if you have the <ltdl.h> header file.])],
+#			[AC_MSG_ERROR([Install ltdl library and appropriate header files
+#                           or run ./configure --disable-plugin])])
 fi
 
 AC_CHECK_HEADERS(unistd.h strings.h limits.h)
 AC_CHECK_HEADERS(sys/resource.h sys/time.h sys/param.h sys/wait.h)
 AC_CHECK_HEADERS(wctype.h wchar.h)
+AC_CHECK_HEADER([Judy.h], ,[JUDYLIB=])
 
-AC_CHECK_TYPES(wint_t)
+AC_CHECK_TYPES(wint_t,,, [#include <wchar.h>])
 AC_CHECK_TYPES(mbstate_t, , , [#include <wchar.h>])
 AC_CHECK_TYPES(wchar_t,   , , [#include <stddef.h>])
+AC_CHECK_TYPES(size_t)
 
 echo .
 echo Checking for system constants
@@ -388,44 +399,104 @@ AC_FUNC_WAIT3
 AC_CHECK_FUNCS(strdup strtol strtoul semget strerror inet_aton)
 AC_CHECK_FUNCS(strdup strtol strtoul)
 AC_CHECK_FUNCS(alarm gethostbyaddr gethostbyname gethostname gettimeofday)
-AC_CHECK_FUNCS(inet_ntoa memmove memset munmap regcomp setenv setlocale)
+AC_CHECK_FUNCS(inet_ntoa memmove memset munmap regcomp setlocale)
 AC_CHECK_FUNCS(socket strcasecmp strchr strrchr strstr uname)
 
 AC_CHECK_FUNCS(iswspace iswalnum towlower)
-AC_REPLACE_FUNCS(wcrtomb wctomb mbrlen mbrtowc mbstowcs mbtowc)
 AC_CHECK_FUNCS(dlopen)
+AC_CHECK_FUNCS(getopt)
 
+AC_REPLACE_FUNCS(setenv)
+AC_REPLACE_FUNCS(wcrtomb wctomb mbrlen mbrtowc mbstowcs mbtowc)
+AC_REPLACE_FUNCS(strlcpy strlcat)
+AC_REPLACE_FUNCS(getopt_long)
+#   [AC_LIBOBJ([getopt_long])
+#   AC_LIBOBJ([getopt])])
 AC_REPLACE_FUNCS(snprintf vsnprintf)
 
 echo .
 echo Making output files
 
 CC="$REALCC"
-LIBS="$REALLIBS"
+LIBS="$REALLIBS $LIBS"
 
 AC_SUBST(DICT_VERSION)
+
 AC_SUBST(WCFLAGS)
 AC_SUBST(SCFLAGS)
-AC_SUBST(WLDFLAGS)
-AC_SUBST(DICT_LDFLAGS)
-AC_SUBST(DICTD_LDFLAGS)
-AC_SUBST(DICTZIP_LDFLAGS)
-AC_SUBST(DICTFMT_LDFLAGS)
 AC_SUBST(XTRACFLAGS)
+AC_SUBST(CPPFLAGS)
+AC_SUBST(CFLAGS)
+
+AC_SUBST(WLDFLAGS)
 AC_SUBST(XTRALDFLAGS)
+
 AC_SUBST(XTRAHEADERS)
+
 AC_SUBST(USE_PLUGIN)
 AC_SUBST(EXEEXT)
 AC_SUBST(allsubdirs)
 AC_SUBST(USE_DICT_ORG)
 AC_SUBST(REGEX_INCLUDE)
+AC_SUBST(local_regex)
+AC_SUBST(local_zlib)
+AC_SUBST(local_libmaa)
+AC_SUBST(JUDYLIB)
 
 AC_CONFIG_FILES([Makefile doc/Makefile include_regex.h])
 AC_CONFIG_FILES([dictdplugin-config], [chmod +x dictdplugin-config])
+AC_CONFIG_FILES([dictl], [chmod +x dictl])
+AC_CONFIG_FILES([colorit], [chmod +x colorit])
 
 AC_OUTPUT
 
+echo -en '\n\n'
+
+# MAA
+echo -n "maa:             "
+if test "_$local_libmaa" = "_0"; then
+  echo system
+else
+  echo local
+fi
+
+# ZLIB
+echo -n "zlib:            "
+if test "_$local_zlib" = "_0"; then
+  echo system
+else
+  echo local
+fi
+
+# REGEX
+echo -n "regex:           "
+if test "_$local_regex" = "_0"; then
+  echo system
+else
+  echo local
+fi
+
+# PLUGIN SUPPORT
+echo -n "plugin support:  "
+if test "_$USE_PLUGIN" = "_"; then
+  echo disabled
+else
+  case "$USE_PLUGIN" in
+    1) echo libltdl;;
+    2) echo native
+  esac
+
+  echo -n " judy plugin:    "
+  if test "$_JUDYLIB" = "_"; then
+    echo "disabled"
+  else
+    echo "enabled"
+  fi
+fi
+
+echo -en '\n\n'
+
 date > stamp-h.in
 date > stamp-h
-echo .
-echo Done
+#echo .
+#echo Done

@@ -17,11 +17,13 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: dictd.c,v 1.87 2003/07/21 10:02:33 cheusov Exp $
+ * $Id: dictd.c,v 1.100 2003/12/08 17:14:47 cheusov Exp $
  * 
  */
 
 #include "dictd.h"
+#include "str.h"
+
 #include "servparse.h"
 #include "strategy.h"
 #include "index.h"
@@ -57,10 +59,19 @@ static char       *_dict_argvstart;
 static int        _dict_argvlen;
 
        int        _dict_forks;
-const char        *locale      = "C";
-int                inetd       = 0;
+const char        *locale       = "C";
+const char        *preprocessor = NULL;
+int                inetd        = 0;
+
+int                need_reload_config = 0;
 
 static const char *configFile  = DICT_CONFIG_PATH DICTD_CONFIG_NAME;
+
+static void dict_close_databases (dictConfig *c);
+static void sanity (const char *confFile);
+static void dict_init_databases (dictConfig *c);
+static void dict_config_print (FILE *stream, dictConfig *c);
+static void postprocess_filenames (dictConfig *dc);
 
 void dict_initsetproctitle( int argc, char **argv, char **envp )
 {
@@ -207,6 +218,23 @@ static void log_sig_info (int sig)
       dict_format_time (tim_get_system ("dictd")));
 }
 
+static void reload_config (void)
+{
+   dict_close_databases (DictConfig);
+
+   if (!access(configFile,R_OK)){
+      prs_file_pp (preprocessor, configFile);
+      postprocess_filenames (DictConfig);
+   }
+
+   sanity (configFile);
+
+   if (dbg_test (DBG_VERBOSE))
+      dict_config_print( NULL, DictConfig );
+
+   dict_init_databases (DictConfig);
+}
+
 static void handler( int sig )
 {
    const char *name = NULL;
@@ -218,17 +246,22 @@ static void handler( int sig )
       daemon_terminate( sig, name );
    } else {
       tim_stop( "dictd" );
-      if (sig == SIGALRM && _dict_markTime > 0) {
-	 time(&t);
-	 log_info( ":T: %24.24s; %d/%d %sr %su %ss\n",
-		   ctime(&t),
-		   _dict_forks - _dict_reaps,
-		   _dict_forks,
-		   dict_format_time( tim_get_real( "dictd" ) ),
-		   dict_format_time( tim_get_user( "dictd" ) ),
-		   dict_format_time( tim_get_system( "dictd" ) ) );
-	 alarm(_dict_markTime);
-	 return;
+      switch (sig){
+      case SIGALRM:
+	 if (_dict_markTime > 0){
+	    time(&t);
+	    log_info( ":T: %24.24s; %d/%d %sr %su %ss\n",
+		      ctime(&t),
+		      _dict_forks - _dict_reaps,
+		      _dict_forks,
+		      dict_format_time( tim_get_real( "dictd" ) ),
+		      dict_format_time( tim_get_user( "dictd" ) ),
+		      dict_format_time( tim_get_system( "dictd" ) ) );
+	    alarm(_dict_markTime);
+	    return;
+	 }
+
+	 break;
       }
 
       log_sig_info (sig);
@@ -236,11 +269,6 @@ static void handler( int sig )
    if (!dbg_test(DBG_NOFORK) || sig != SIGALRM)
       exit(sig+128);
 }
-
-static void dict_close_databases (dictConfig *c);
-static void sanity (const char *confFile);
-static void dict_init_databases (dictConfig *c);
-static void dict_config_print (FILE *stream, dictConfig *c);
 
 static const char *postprocess_filename (const char *fn, const char *prefix)
 {
@@ -289,20 +317,7 @@ static void postprocess_filenames (dictConfig *dc)
 static void handler_sighup (int sig)
 {
    log_sig_info (sig);
-
-   dict_close_databases (DictConfig);
-
-   if (!access(configFile,R_OK)){
-      prs_file_nocpp (configFile);
-      postprocess_filenames (DictConfig);
-   }
-
-   sanity (configFile);
-
-   if (dbg_test (DBG_VERBOSE))
-      dict_config_print( NULL, DictConfig );
-
-   dict_init_databases (DictConfig);
+   need_reload_config = 1;
 }
 
 static void setsig( int sig, void (*f)(int), int sa_flags )
@@ -421,6 +436,9 @@ static const char *get_entry_info( dictDatabase *db, const char *entryName )
 	 list, entryName, db, DICT_EXACT,
 	 NULL, NULL, NULL ))
    {
+#ifdef USE_PLUGIN
+      call_dictdb_free (DictConfig->dbl);
+#endif
       lst_destroy( list );
       return NULL;
    }
@@ -429,16 +447,21 @@ static const char *get_entry_info( dictDatabase *db, const char *entryName )
 
    buf = pt = dict_data_obtain( db, dw );
 
-   while (*pt != '\n')
-      ++pt;
+   if (!strncmp (pt, "00database", 10) || !strncmp (pt, "00-database", 11)){
+      while (*pt != '\n')
+	 ++pt;
 
-   ++pt;
+      ++pt;
+   }
 
    while (*pt == ' ' || *pt == '\t')
       ++pt;
 
    pt[ strlen(pt) - 1 ] = '\0';
 
+#ifdef USE_PLUGIN
+   call_dictdb_free (DictConfig->dbl);
+#endif
    dict_destroy_list( list );
 
    pt = xstrdup (pt);
@@ -550,16 +573,44 @@ static int init_plugin( const void *datum )
    return 0;
 }
 
+void dict_disable_strat (dictDatabase *db, const char* strategy)
+{
+   int strat = -1;
+   int array_size = get_max_strategy_num () + 1;
+
+   assert (db);
+   assert (strategy);
+
+   if (!db -> strategy_disabled){
+      db -> strategy_disabled = xmalloc (array_size * sizeof (int));
+      memset (db -> strategy_disabled, 0, array_size * sizeof (int));
+   }
+
+   strat = lookup_strategy (strategy);
+
+   if (strat == -1){
+      log_info(":E: strategy '%s' is not available\n", strategy);
+      err_fatal(__FUNCTION__, ":E: terminating due to errors\n");
+   }else{
+      db -> strategy_disabled [strat] = 1;
+   }
+}
+
 static int init_database( const void *datum )
 {
    dictDatabase *db = (dictDatabase *)datum;
 
    PRINTF (DBG_INIT, (":I: Initializing '%s'\n", db->databaseName));
 
-   PRINTF (DBG_INIT, (":I:   Opening indices\n"));
+   if (db->indexFilename){
+      PRINTF (DBG_INIT, (":I:   Opening indices\n"));
+   }
 
    db->index        = dict_index_open( db->indexFilename, 1, 0, 0 );
-   PRINTF (DBG_INIT, (":I:     .index <ok>\n"));
+
+   if (db->indexFilename){
+      PRINTF (DBG_INIT, (":I:     .index <ok>\n"));
+   }
 
    if (db->index){
       db->index_suffix = dict_index_open(
@@ -583,25 +634,39 @@ static int init_database( const void *datum )
       db->index_word->flag_allchars = db->index->flag_allchars;
    }
 
-   PRINTF (DBG_INIT, (":I:   Opening data\n"));
+   if (db->dataFilename){
+      PRINTF (DBG_INIT, (":I:   Opening data\n"));
+   }
+
    db->data         = dict_data_open( db->dataFilename, 0 );
 
-   PRINTF(DBG_INIT,
-	  (":I: '%s' initialized\n", db->databaseName));
+   if (db->dataFilename){
+      PRINTF(DBG_INIT,
+	     (":I: '%s' initialized\n", db->databaseName));
+   }
 
    return 0;
 }
 
 static int init_database_short (const void *datum)
 {
-   dictDatabase *db = (dictDatabase *)datum;
+   char *NL;
 
-   if (!db->databaseShort)
+   dictDatabase *db = (dictDatabase *) datum;
+
+   if (!db->databaseShort){
       db->databaseShort = get_entry_info( db, DICT_SHORT_ENTRY_NAME );
-   else if (*db->databaseShort == '@' && !db -> virtual_db)
+   }else if (*db->databaseShort == '@'){
       db->databaseShort = get_entry_info( db, db->databaseShort + 1 );
-   else
+   }else{
       db->databaseShort = xstrdup (db->databaseShort);
+   }
+
+   if (db->databaseShort){
+      NL = strchr (db->databaseShort, '\n');
+      if (NL)
+	 *NL = 0;
+   }
 
    if (!db->databaseShort)
       db->databaseShort = xstrdup (db->databaseName);
@@ -642,6 +707,8 @@ static int close_database (const void *datum)
       xfree ((void *) db -> indexsuffixFilename);
    if (db -> pluginFilename)
       xfree ((void *) db -> pluginFilename);
+   if (db -> strategy_disabled)
+      xfree ((void *) db -> strategy_disabled);
 
    return 0;
 }
@@ -778,9 +845,6 @@ static int dump_def( const void *datum )
 static void dict_dump_defs( lst_List list )
 {
    lst_iterate (list, dump_def);
-#ifdef USE_PLUGIN
-   call_dictdb_free (list);
-#endif
 }
 
 static const char *id_string( const char *id )
@@ -796,7 +860,7 @@ const char *dict_get_banner( int shortFlag )
 {
    static char    *shortBuffer = NULL;
    static char    *longBuffer = NULL;
-   const char     *id = "$Id: dictd.c,v 1.87 2003/07/21 10:02:33 cheusov Exp $";
+   const char     *id = "$Id: dictd.c,v 1.100 2003/12/08 17:14:47 cheusov Exp $";
    struct utsname uts;
    
    if (shortFlag && shortBuffer) return shortBuffer;
@@ -825,13 +889,12 @@ const char *dict_get_banner( int shortFlag )
 static void banner( void )
 {
    printf( "%s\n", dict_get_banner(0) );
-   printf( "Copyright 1997-2002 Rickard E. Faith (faith@dict.org)\n" );
+   printf( "Copyright 1997-2002 Rickard E. Faith (faith@dict.org)\n\n" );
 }
 
 static void license( void )
 {
    static const char *license_msg[] = {
-     "",
      "This program is free software; you can redistribute it and/or modify it",
      "under the terms of the GNU General Public License as published by the",
      "Free Software Foundation; either version 1, or (at your option) any",
@@ -855,6 +918,9 @@ static void license( void )
 static void help( void )
 {
    static const char *help_msg[] = {
+   "Usage: dictd [options]",
+   "Start the dictd daemon",
+   "",
       "-h --help             give this help",
       "   --license          display software license",
       "-v --verbose          verbose mode",
@@ -870,7 +936,8 @@ static void help( void )
       "-m --mark <minutes>   how often should a timestamp be logged",
       "   --facility <fac>   set syslog logging facility",
       "-d --debug <option>   select debug option",
-      "-i --inetd               run from inetd",
+      "-i --inetd            run from inetd",
+      "   --pp <prog>        set preprocessor for configuration file",
       "-f --force            force startup even if daemon running",
       "   --locale <locale>  specifies the locale used for searching.\n\
                       if no locale is specified, the \"C\" locale is used.",
@@ -1040,16 +1107,6 @@ static void sanity(const char *confFile)
    }
 }
 
-static char *strlwr_8bit (char *str)
-{
-   char *p;
-   for (p = str; *p; ++p){
-      *p = tolower ((unsigned char) *p);
-   }
-
-   return str;
-}
-
 static void set_utf8bit_mode (const char *loc)
 {
    char *locale_copy;
@@ -1127,6 +1184,12 @@ static void dict_test (
       }
    }
 
+#ifdef USE_PLUGIN
+   if (count != 0){
+      call_dictdb_free (DictConfig->dbl);
+   }
+#endif
+
    dict_destroy_list (l);
 }
 
@@ -1197,6 +1260,7 @@ int main( int argc, char **argv, char **envp )
       { "test-idle",        0, 0, 515 },
       { "add-strategy",     1, 0, 516 },
       { "fast-start",       0, 0, 517 },
+      { "pp",               1, 0, 518 },
       { 0,                  0, 0, 0  }
    };
 
@@ -1259,16 +1323,16 @@ int main( int argc, char **argv, char **envp )
       case 503: depth = atoi(optarg);                     break;
       case 504: _dict_daemon_limit = atoi(optarg);        break;
       case 505: ++useSyslog; log_set_facility(optarg);    break;
-      case 506: locale = optarg;                          break;
+      case 506: locale = str_copy(optarg);                break;
       case 508: mmap_mode = 0;                            break;
-      case 509: database_arg = optarg;                    break;
+      case 509: database_arg = str_copy(optarg);          break;
       case 507:
-	 strategy_arg = optarg;
-	 strategy = lookup_strategy(optarg);
+	 strategy_arg = str_copy (optarg);
+	 strategy = lookup_strategy (strategy_arg);
 	 break;
       case 511:
-	 default_strategy_arg = optarg;
-	 default_strategy = lookup_strategy(optarg);
+	 default_strategy_arg = str_copy (optarg);
+	 default_strategy = lookup_strategy (default_strategy_arg);
 	 break;
       case 512:
 	 match_mode = 1;
@@ -1296,6 +1360,7 @@ int main( int argc, char **argv, char **envp )
 
 	 break;
       case 517: optStart_mode = 0;                        break;
+      case 518: preprocessor = str_copy (optarg);         break;
       case 'h':
       default:  help(); exit(0);                          break;
       }
@@ -1335,7 +1400,7 @@ int main( int argc, char **argv, char **envp )
    alarm(_dict_markTime);
 
    if (!access(configFile,R_OK)) {
-      prs_file_nocpp( configFile );
+      prs_file_pp (preprocessor, configFile );
       postprocess_filenames (DictConfig);
    }
 
@@ -1488,7 +1553,14 @@ int main( int argc, char **argv, char **envp )
          log_info( ":I: %d accepting on %s\n", getpid(), service );
       if ((childSocket = accept(masterSocket,
 				(struct sockaddr *)&csin, &alen)) < 0) {
-	 if (errno == EINTR) continue;
+	 if (errno == EINTR){
+	    if (need_reload_config){
+	       reload_config ();
+	       need_reload_config = 0;
+	    }
+	    continue;
+	 }
+
 #ifdef __linux__
 				/* Linux seems to return more types of
                                    errors than other OSs. */

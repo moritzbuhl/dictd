@@ -17,7 +17,7 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 675 Mass Ave, Cambridge, MA 02139, USA.
 # 
-# $Id: Makefile.in,v 1.79 2003/07/22 12:52:27 cheusov Exp $
+# $Id: Makefile.in,v 1.94 2003/11/05 01:25:10 cheusov Exp $
 #
 
 # Add a _letter_ if you change the version number and release your own version.
@@ -44,6 +44,11 @@ sbindir=        @sbindir@
 includedir=     @includedir@
 datadir=        @datadir@
 
+
+local_regex=    @local_regex@
+local_libmaa=   @local_libmaa@
+local_zlib=     @local_zlib@
+
 DESTDIR=
 
 SHELL=		/bin/sh
@@ -67,27 +72,31 @@ INSTALL_DATA=	@INSTALL_DATA@
 LEX=		@LEX@
 LEXLIB= 	@LEXLIB@
 YACC=		@YACC@
+JUDYLIB=        @JUDYLIB@
 
-CFLAGS=		@CFLAGS@ -DDICT_PLUGIN_PATH=\"$(PLUGIN_DIR)\" -DDICT_DICTIONARY_PATH=\"$(DICT_DIR)\" -DDICT_VERSION=\"$(DICT_VERSION)\" -DDICT_CONFIG_PATH=\"$(CONF_DIR)\"
+CFLAGS= @CFLAGS@ -DDICT_PLUGIN_PATH=\"$(PLUGIN_DIR)\" -DDICT_DICTIONARY_PATH=\"$(DICT_DIR)\" -DDICT_VERSION=\"$(DICT_VERSION)\" -DDICT_CONFIG_PATH=\"$(CONF_DIR)\"
 
 SCFLAGS=        @SCFLAGS@
 LDFLAGS=        @LDFLAGS@
 XTRACFLAGS=     @WCFLAGS@ @XTRACFLAGS@ @DEFS@ @CPPFLAGS@ -I.
 XTRALDFLAGS=    @WLDFLAGS@ @XTRALDFLAGS@
-LDLIBS=		    @LIBOBJS@ @LIBS@
-
-DICTFMT_LDFLAGS=  @DICTFMT_LDFLAGS@
-DICTZIP_LDFLAGS=  @DICTZIP_LDFLAGS@
-DICT_LDFLAGS=     @DICT_LDFLAGS@
-DICTD_LDFLAGS=    @DICTD_LDFLAGS@
-
+LDLIBS=		@LIBS@
+LIBOBJS=        @LIBOBJS@
+LIBSOBJS=       $(LIBOBJS:.o=.os)
 EXES=	 	dict dictd dictzip dictfmt
 
+all: $(EXES) $(LIBRARIES)
+
 ifdef USE_PLUGIN
-	PLUGINS=    
-	LIBRARIES=  libdictdplugin.a
-	INCLUDES=   dictdplugin.h
-all             :: plugins
+ifdef JUDYLIB
+PLUGINS=    dictdplugin_judy.so
+endif
+
+LIBRARIES=
+#libdictdplugin.a
+INCLUDES=   dictdplugin.h
+
+all: plugins
 
 .PHONY : samples install.samples uninstall.samples
 samples         : dictdplugin_exit.so dictdplugin_popen.so man_popen.dict
@@ -105,13 +114,10 @@ uninstall.samples :
 
 endif
 
-HEADERS= 	./config.h @XTRAHEADERS@ dictzip.h dictd.h dict.h dictP.h \
-                codes.h md5.h strategy.h defs.h plugin.h data.h index.h parse.h
-
 ifdef USE_PLUGIN
-SRCHOBJS=       index.o data.o dictdplugin.o plugin.o
+SRCHOBJS=       index.o data.o str.o plugin.o #dictdplugin.o 
 else
-SRCHOBJS=       index.o data.o dictdplugin.o
+SRCHOBJS=       index.o data.o str.o #dictdplugin.o 
 endif
 
 NETOBJS=        daemon.o strategy.o net.o servscan.o servparse.o md5.o
@@ -122,49 +128,60 @@ TMPS=           servscan.c servparse.c servparse.h \
 
 @SET_MAKE@
 
-all $(EXES)::
-	@for subdir in `echo $(subdirs)`; do \
-		echo making in $$subdir; \
-	 	if [ "$$subdir" = "zlib" ]; then \
-			(cd $$subdir \
-			&& $(MAKE) CC="$(CC)" CFLAGS="$(CFLAGS)" libz.a) \
-			|| exit 1; \
-		elif [ "$$subdir" = "regex" ]; then \
-			(cd $$subdir \
-			&& $(MAKE) CC="$(CC) $(CFLAGS)" lib) \
-			|| exit 1; \
-		else \
-			(cd $$subdir && $(MAKE)) || exit 1; \
-		fi; \
-	done
+ifeq (1,$(local_libmaa))
+$(PLUGINS) dictdplugin_popen.so dictdplugin_exit.so $(EXES) : local_libmaa
+local_libmaa :
+	( cd $(srcdir)/libmaa && $(MAKE) ) && touch local_libmaa
+endif
 
-all:: $(EXES) $(LIBRARIES) plugins
+ifeq (1,$(local_regex))
+$(PLUGINS) dictdplugin_popen.so dictdplugin_exit.so $(EXES) : local_regex
+local_regex :
+	( cd $(srcdir)/regex && $(MAKE) CC="$(CC) $(CFLAGS)" lib ) && \
+		touch local_regex
+endif
 
-
+ifeq (1,$(local_zlib))
+$(PLUGINS) dictdplugin_popen.so dictdplugin_exit.so $(EXES) : local_zlib
+local_zlib :
+	( cd $(srcdir)/zlib && \
+	$(MAKE) CC="$(CC)" CFLAGS="$(CFLAGS)" libz.a ) && \
+		touch local_zlib
+endif
 
 ALLCFLAGS=$(XTRACFLAGS) $(CFLAGS)
 ALLLDFLAGS=$(XTRALDFLAGS) $(LDFLAGS) $(LDLIBS)
 
 %.o: %.c
-	$(CC) -c $(ALLCFLAGS) $(CFLAGS) $(SCFLAGS) $<
-%: %.o
-	$(CC) -o $@ $^ $(OBJS) $(ALLLDFLAGS)
+	$(CC) -c $(ALLCFLAGS) $(SCFLAGS) $< -o $@
+%.o: %.cpp
+	$(CXX) -c $(ALLCFLAGS) $(SCFLAGS) $< -o $@
+%.os: %.c
+	$(CC) -fPIC -c $(ALLCFLAGS) $(SCFLAGS) $< -o $@
+%.os: %.cpp
+	$(CXX) -fPIC -c $(ALLCFLAGS) $(SCFLAGS) $< -o $@
 
-$(SRCHOBJS):  $(HEADERS)
-$(NETOBJS):  $(HEADERS)
-$(CLIOBJS):  $(HEADERS)
-dict.o dictfmt.o dictd.o dictzip.o : $(HEADERS)
+%: %.o
+	$(CC) -o $@ $(filter-out local_regex local_zlib local_libmaa, $^) \
+		$(OBJS) $(ALLLDFLAGS)
+
+include $(srcdir)/deps
+
 dictd.o : servparse.h
 
-dictdplugin_exit.so : libdictdplugin.a
+$(PLUGINS) dictdplugin_popen.so dictdplugin_exit.so : $(LIBSOBJS)
+#	libdictdplugin.a 
 
 lib%.a : %.o
 	$(AR) rc $@ $^
 
-%.so: %.c
-	$(CC) $(CFLAGS) $(LDFLAGS) -shared $^ -o $@ libdictdplugin.a
-%.so: %.cpp
-	$(CXX) $(CFLAGS) $(LDFLAGS) -shared $^ -o $@ libdictdplugin.a
+%.so : %.os
+	$(CC) -o $@ $(filter-out local_regex local_zlib local_libmaa, $^) \
+		$(ALLLDFLAGS) -shared
+
+dictdplugin_judy.so : data.os str.os heap.os dictdplugin_judy.os
+	$(CC) $(filter-out local_regex local_zlib local_libmaa, $^) \
+		 $(ALLLDFLAGS) $(JUDYLIB) -shared -o $@
 
 .PHONY: plugins
 plugins: $(PLUGINS)
@@ -177,17 +194,10 @@ man_popen.dict : dictdplugin-config dictfmt_plugin dictfmt
    } | ./dictfmt_plugin dictdplugin_popen.so -s \
       'Example man dict based on example POPEN plugin' man_popen
 
-dict :: dict.o $(CLIOBJS) @LIBOBJS@ parse.o
-	$(CC) -o $@ $^ $(OBJS) $(ALLLDFLAGS) $(DICT_LDFLAGS)
-
-dictd :: dictd.o $(NETOBJS) $(SRCHOBJS) @LIBOBJS@ parse.o
-	$(CC) -o $@ $^ $(OBJS) $(ALLLDFLAGS) $(DICTD_LDFLAGS)
-
-dictzip :: dictzip.o data.o @LIBOBJS@
-	$(CC) -o $@ $^ $(OBJS) $(ALLLDFLAGS) $(DICTZIP_LDFLAGS)
-
-dictfmt :: dictfmt.o @LIBOBJS@
-	$(CC) -o $@ $^ $(OBJS) $(ALLLDFLAGS) $(DICTFMT_LDFLAGS)
+dict    : $(CLIOBJS) $(LIBOBJS) parse.o
+dictd   : $(NETOBJS) $(SRCHOBJS) $(LIBOBJS) parse.o
+dictzip : data.o $(LIBOBJS)
+dictfmt : str.o $(LIBOBJS)
 
 servscan.c: servscan.l
 	$(LEX) $(LFLAGS) -o$@ $<
@@ -216,7 +226,7 @@ clientparse.c clientparse.h: clientparse.y
 clientparse.o: clientparse.c
 
 .PHONY: install.dict install.dictzip install.dictfmt install.dictd \
-        install.libs install.includes
+        install.libs install.includes install.colorit
 
 install.dict: dict
 	if test ! -d $(DESTDIR)$(bindir); then \
@@ -226,7 +236,19 @@ install.dict: dict
         $(INSTALL) -d 755 $(DESTDIR)$(man1_prefix); \
     fi; \
 	$(INSTALL_PROGRAM) dict$(EXEEXT) $(DESTDIR)$(bindir); \
-	$(INSTALL_DATA) dict.1 $(DESTDIR)$(man1_prefix)/dict.1
+	$(INSTALL_DATA) dict.1 $(DESTDIR)$(man1_prefix)/dict.1; \
+	$(INSTALL_SCRIPT) dictl $(DESTDIR)$(bindir); \
+	$(INSTALL_DATA) dictl.1 $(DESTDIR)$(man1_prefix)/dictl.1
+
+install.colorit: colorit
+	if test ! -d $(DESTDIR)$(bindir); then \
+        $(INSTALL) -d 755 $(DESTDIR)$(bindir); \
+    fi; \
+	if test ! -d $(DESTDIR)$(man1_prefix); then \
+        $(INSTALL) -d 755 $(DESTDIR)$(man1_prefix); \
+    fi; \
+	$(INSTALL_SCRIPT) colorit $(DESTDIR)$(bindir); \
+	$(INSTALL_DATA) colorit.1 $(DESTDIR)$(man1_prefix)
 
 install.dictzip: dictzip
 	if test ! -d $(DESTDIR)$(bindir); then \
@@ -287,16 +309,17 @@ install.plugins:
 
 install: \
 install.dict install.dictzip install.dictd install.dictfmt \
-install.libs install.includes install.plugins
+install.libs install.includes install.plugins install.colorit
 ifdef USE_PLUGIN
 	$(INSTALL_SCRIPT) dictdplugin-config $(DESTDIR)$(bindir)
 endif
 
 .PHONY: uninstall.dict uninstall.dictzip uninstall.dictfmt uninstall.dictd \
-        uninstall.libs uninstall.includes
+        uninstall.libs uninstall.includes uninstall.colorit
 
 uninstall.dict:
 	rm -f $(DESTDIR)$(bindir)/dict$(EXEEXT) $(DESTDIR)$(man1_prefix)/dict.1
+	rm -f $(DESTDIR)$(bindir)/dictl $(DESTDIR)$(man1_prefix)/dictl.1
 
 uninstall.dictzip:
 	rm -f $(DESTDIR)$(bindir)/dictzip$(EXEEXT) $(DESTDIR)$(man1_prefix)/dictzip.1
@@ -316,6 +339,9 @@ uninstall.dictfmt:
 	test _$(USE_PLUGIN) != _ && \
 		rm -f $(DESTDIR)$(bindir)/dictfmt_plugin || true
 
+uninstall.colorit:
+	rm -f $(DESTDIR)$(bindir)/colorit $(DESTDIR)$(man1_prefix)/colorit.1
+
 uninstall.includes:
 ifdef USE_PLUGIN
 	rm -f $(addprefix $(DESTDIR)$(includedir)/, $(INCLUDES))
@@ -328,14 +354,14 @@ endif
 
 uninstall.plugins:
 ifdef USE_PLUGIN
-	rm -f $(addprefix $(DESTDIR)$(libexecdir), $(PLUGINS))
+	rm -f $(addprefix $(DESTDIR)$(libexecdir)/, $(PLUGINS))
 endif
 
 .PHONY: uninstall
 
 uninstall: \
 uninstall.dict uninstall.dictd uninstall.dictfmt uninstall.dictzip \
-uninstall.libs uninstall.includes uninstall.plugins
+uninstall.libs uninstall.includes uninstall.plugins uninstall.colorit
 ifdef USE_PLUGIN
 	rm -f $(DESTDIR)$(bindir)/dictdplugin-config
 endif
@@ -354,7 +380,6 @@ ChangeLog:
            s,\(.*\)<\([^@<>]\+\)@\([^@<>]\+\)>\(.*\),\1<\2 at \3}\4,g' \
 	> ChangeLog;)
 
-
 dist:
 	@( CVSROOT=`cat CVS/Root`; \
 	export CVSROOT; \
@@ -367,6 +392,7 @@ dist:
 	cvs export -fd dictd-$${VERSION} -r dictd-$${VERSION_CVS} dictd1; \
 	cd dictd-$${VERSION}; \
 	make -f Makefile.conf; \
+	rm -rf autom4te.cache libmaa/autom4te.cache \
 	chmod -R a+rX,g-w .; \
 	cd ..; \
 	echo "***** Taring and zipping dictd-$${VERSION}.tar.gz..."; \
@@ -376,7 +402,7 @@ dist:
 
 .PHONY: clean distclean tags
 clean:
-	-rm -f *.o *.a *.so *.s *~ core a.out config.log $(EXES) $(TMPS)
+	-rm -f *.o *.os *.a *.so *.s *~ core a.out config.log $(EXES) $(TMPS)
 	-rm -f *.log *.aux *.toc *.dvi *.ps
 	-rm -f *.cfg *.dtk .inslog tca.map
 	-rm -f *.dct *.idx y.output TAGS
@@ -404,13 +430,20 @@ distclean: recursive-clean
 	rm -f regex/regex.h; \
 	rm -f config.h config.cache config.status stamp-h.in stamp-h; \
 	rm -f Makefile doc/Makefile dictdplugin-config include_regex.h
+	rm -f local_* colorit dictl
 
 cvsclean: distclean
-	-rm -f configure libmaa/configure
+	rm -f configure libmaa/configure
+	rm -rf autom4te.cache libmaa/autom4te.cache
 
 tags:
 	etags *.[ch]
 
+deps:
+	for i in *.c *.cpp; do \
+      gcc -MM $$i 2>/dev/null; \
+   done | awk '{gsub(/ \/[^ ]+/, ""); print}' | \
+   sed 's,\(.*[.]\)o,\1o \1os,1' > deps
 
 # The following is based on the "Automatic Remaking" node in the GNU
 # Autoconf documentation:
@@ -433,4 +466,3 @@ Makefile: Makefile.in config.status
 
 config.status: configure
 	./config.status --recheck
-

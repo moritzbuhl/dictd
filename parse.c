@@ -17,7 +17,7 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: parse.c,v 1.1 2003/07/07 12:24:16 cheusov Exp $
+ * $Id: parse.c,v 1.5 2003/10/26 12:45:58 cheusov Exp $
  *
  * \section{Parsing (and Lexing) Support}
  * 
@@ -59,6 +59,35 @@ void prs_set_cpp_options( const char *cpp_options )
    program, but this has not been implemented.  Also, either this function
    or another function should start an interactive parse session. */
 
+void prs_file_pp (const char *pp, const char *filename)
+{
+   char              *buffer;
+   const char        **pt;
+
+   if (!filename)
+      err_fatal( __FUNCTION__, "No filename specified\n" );
+
+   if (!pp){
+      prs_file_nocpp (filename);
+      return;
+   }
+
+   buffer = alloca (strlen (pp) + strlen (filename) + 100);
+
+   sprintf (buffer, "%s '%s' 2>/dev/null", pp, filename);
+
+
+   PRINTF(MAA_PARSE,("%s: %s\n", __FUNCTION__, buffer));
+   if (!(yyin = popen( buffer, "r" )))
+      err_fatal_errno( __FUNCTION__,
+		       "Cannot open \"%s\" for read\n", buffer );
+
+   src_new_file( filename );
+   yydebug = _prs_debug_flag;
+   yyparse();
+   pclose( yyin );
+}
+
 void prs_file( const char *filename )
 {
    char              *buffer;
@@ -77,7 +106,7 @@ void prs_file( const char *filename )
 
    if (!cpp) {
       if ((cpp = getenv( "KHEPERA_CPP" ))) {
-         PRINTF(MAA_PARSE,(__FUNCTION__ ": Using KHEPERA_CPP from %s\n",cpp));
+         PRINTF(MAA_PARSE,("%s: Using KHEPERA_CPP from %s\n", __FUNCTION__, cpp));
       }
       
                                 /* Always look for gcc's cpp first, since
@@ -88,7 +117,7 @@ void prs_file( const char *filename )
          
          if (fread( buf, 1, 1023, tmp ) > 0) {
             if ((t = strchr( buf, '\n' ))) *t = '\0';
-            PRINTF(MAA_PARSE,(__FUNCTION__ ": Using GNU cpp from %s\n",buf));
+            PRINTF(MAA_PARSE,("%s: Using GNU cpp from %s\n", __FUNCTION__, buf));
             cpp = str_find( buf );
             extra_options = "-nostdinc -nostdinc++";
          }
@@ -105,7 +134,7 @@ void prs_file( const char *filename )
          for (pt = cpps; **pt; pt++) {
             if (!access( *pt, X_OK )) {
                PRINTF(MAA_PARSE,
-                      (__FUNCTION__ ": Using system cpp from %s\n",*pt));
+                      ("%s: Using system cpp from %s\n", __FUNCTION__, *pt));
                cpp = *pt;
                break;
             }
@@ -125,7 +154,7 @@ void prs_file( const char *filename )
    sprintf( buffer, "%s -I. %s %s 2>/dev/null", cpp,
 	    _prs_cpp_options ? _prs_cpp_options : "", filename );
 
-   PRINTF(MAA_PARSE,(__FUNCTION__ ": %s\n",buffer));
+   PRINTF(MAA_PARSE,("%s: %s\n", __FUNCTION__, buffer));
    if (!(yyin = popen( buffer, "r" )))
       err_fatal_errno( __FUNCTION__,
 		       "Cannot open \"%s\" for read\n", filename );
@@ -178,7 +207,8 @@ int prs_make_integer( const char *string, int length )
    
    if (!length) return 0;
    strncpy( buffer, string, length );
-   buffer[length] = '\0';
+   buffer [length] = 0;
+
    return atoi( buffer );
 }
 
@@ -189,10 +219,11 @@ int prs_make_integer( const char *string, int length )
 double prs_make_double( const char *string, int length )
 {
    char *buffer = alloca( length + 1 );
-   
+
    if (!length) return 0;
    strncpy( buffer, string, length );
-   buffer[length] = '\0';
+   buffer [length] = 0;
+
    return atof( buffer );
 }
 

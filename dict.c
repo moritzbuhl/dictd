@@ -17,7 +17,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: dict.c,v 1.38 2003/07/07 12:24:16 cheusov Exp $
+ * $Id: dict.c,v 1.40 2003/12/08 17:14:46 cheusov Exp $
  * 
  */
 
@@ -965,7 +965,7 @@ static const char *id_string( const char *id )
 static const char *client_get_banner( void )
 {
    static char       *buffer= NULL;
-   const char        *id = "$Id: dict.c,v 1.38 2003/07/07 12:24:16 cheusov Exp $";
+   const char        *id = "$Id: dict.c,v 1.40 2003/12/08 17:14:46 cheusov Exp $";
    struct utsname    uts;
    
    if (buffer) return buffer;
@@ -981,13 +981,12 @@ static void banner( FILE *out_stream )
 {
    fprintf( out_stream , "%s\n", client_get_banner() );
    fprintf( out_stream,
-	    "Copyright 1997-2002 Rickard E. Faith (faith@dict.org)\n" );
+	    "Copyright 1997-2002 Rickard E. Faith (faith@dict.org)\n\n" );
 }
 
 static void license( void )
 {
    static const char *license_msg[] = {
-     "",
      "This program is free software; you can redistribute it and/or modify it",
      "under the terms of the GNU General Public License as published by the",
      "Free Software Foundation; either version 1, or (at your option) any",
@@ -1011,6 +1010,9 @@ static void license( void )
 static void help( FILE *out_stream )
 {
    static const char *help_msg[] = {
+   "Usage: dict [options] [word]",
+   "Query a dictd server for the definition of a word", 
+   "",
       "-h --host <server>        specify server",
       "-p --port <service>       specify port",
       "-d --database <dbname>    select a database to search",

@@ -17,7 +17,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: daemon.c,v 1.65 2003/07/21 10:02:33 cheusov Exp $
+ * $Id: daemon.c,v 1.69 2003/10/31 00:40:04 cheusov Exp $
  * 
  */
 
@@ -675,9 +675,9 @@ static void daemon_banner( void )
 
    snprintf( daemonStamp, sizeof (daemonStamp), "<%d.%d.%lu@%s>", 
 	    _dict_forks,
-	    getpid(),
+	    (int) getpid(),
 	    (long unsigned)t,
-	    net_hostname() );
+	     net_hostname() );
    daemon_printf( "%d %s %s <auth.mime> %s\n",
 		  CODE_HELLO,
                   net_hostname(),
@@ -729,7 +729,7 @@ static void daemon_define( const char *cmdline, int argc, char **argv )
       daemon_dump_defs( list );
       daemon_ok( CODE_OK, "ok", "c" );
 #ifdef USE_PLUGIN
-      call_dictdb_free (list);
+      call_dictdb_free (DictConfig->dbl);
 #endif
       dict_destroy_list( list );
       return;
@@ -737,7 +737,7 @@ static void daemon_define( const char *cmdline, int argc, char **argv )
 
    if (!db_found) {
 #ifdef USE_PLUGIN
-      call_dictdb_free (list);
+      call_dictdb_free (DictConfig->dbl);
 #endif
       dict_destroy_list( list );
       daemon_printf( "%d invalid database, use SHOW DB for list\n",
@@ -746,7 +746,7 @@ static void daemon_define( const char *cmdline, int argc, char **argv )
    }
 
 #ifdef USE_PLUGIN
-   call_dictdb_free (list);
+   call_dictdb_free (DictConfig->dbl);
 #endif
    dict_destroy_list( list );
    daemon_log( DICT_LOG_NOMATCH,
@@ -808,7 +808,7 @@ static void daemon_match( const char *cmdline, int argc, char **argv )
       daemon_dump_matches( list );
       daemon_ok( CODE_OK, "ok", "c" );
 #ifdef USE_PLUGIN
-      call_dictdb_free (list);
+      call_dictdb_free (DictConfig->dbl);
 #endif
       dict_destroy_list( list );
       return;
@@ -816,7 +816,7 @@ static void daemon_match( const char *cmdline, int argc, char **argv )
 
    if (!db_found) {
 #ifdef USE_PLUGIN
-      call_dictdb_free (list);
+      call_dictdb_free (DictConfig->dbl);
 #endif
       dict_destroy_list( list );
       daemon_printf( "%d invalid database, use SHOW DB for list\n",
@@ -825,7 +825,7 @@ static void daemon_match( const char *cmdline, int argc, char **argv )
    }
 
 #ifdef USE_PLUGIN
-   call_dictdb_free (list);
+   call_dictdb_free (DictConfig->dbl);
 #endif
    dict_destroy_list( list );
    daemon_log( DICT_LOG_NOMATCH,
@@ -901,26 +901,6 @@ static void destroy_word_list (lst_List l)
 }
 
 /*
-  Replaces invisible databases with db argument.
- */
-static void replace_invisible_databases (
-   lst_Position *pos,
-   const dictDatabase *db)
-{
-   dictWord *dw;
-
-   while (pos){
-      dw = (dictWord *) lst_get_position (pos);
-
-      if (dw -> database && dw -> database -> invisible){
-	 dw -> database_visible = db;
-      }
-
-      pos = lst_next_position (pos);
-   }
-}
-
-/*
   Search for all words in word_list in the database db
  */
 static int dict_search_words (
@@ -944,33 +924,15 @@ static int dict_search_words (
       word = lst_get_position (word_list_pos);
 
       if (word){
-	 if (db -> virtual_db_list){
-	    assert (lst_init_position (db -> virtual_db_list));
+	 matches_count = dict_search (
+	    l, word, db, strategy,
+	    result, extra_result, extra_result_size);
 
-	    old_count = lst_length (l);
+	 if (*result == DICT_PLUGIN_RESULT_PREPROCESS){
+	    assert (matches_count > 0);
 
-	    matches_count = dict_search_databases (
-	       l, lst_init_position (db -> virtual_db_list),
-	       "*", word, strategy, &db_found);
-
-	    assert (db_found);
-
-	    if (matches_count > 0){
-	       replace_invisible_databases (
-		  lst_nth_position (l, old_count + 1),
-		  db);
-	    }
-	 }else{
-	    matches_count = dict_search (
-	       l, word, db, strategy,
-	       result, extra_result, extra_result_size);
-
-	    if (*result == DICT_PLUGIN_RESULT_PREPROCESS){
-	       assert (matches_count > 0);
-
-	       xfree (lst_get_position (word_list_pos));
-	       lst_set_position (word_list_pos, NULL);
-	    }
+	    xfree (lst_get_position (word_list_pos));
+	    lst_set_position (word_list_pos, NULL);
 	 }
 
 	 if (matches_count < 0){
@@ -1163,10 +1125,7 @@ static void daemon_show_info( const char *cmdline, int argc, char **argv )
 
    list = lst_create();
    while ((db = next_database(&databasePosition, argv[2] ))) {
-      if (
-	 db -> databaseInfo &&
-	 (db -> virtual_db || db -> databaseInfo [0] != '@'))
-      {
+      if (db -> databaseInfo && db -> databaseInfo [0] != '@'){
 	 daemon_printf( "%d information for %s\n",
 			CODE_DATABASE_INFO, argv[2] );
 	 daemon_mime();
@@ -1189,6 +1148,10 @@ static void daemon_show_info( const char *cmdline, int argc, char **argv )
 	 dw = lst_nth_get( list, 1 );
 	 buf = dict_data_obtain( db, dw );
 
+#ifdef USE_PLUGIN
+	 call_dictdb_free (DictConfig->dbl);
+#endif
+
 	 dict_destroy_list( list );
 	 daemon_printf( "%d information for %s\n",
 			CODE_DATABASE_INFO, argv[2] );
@@ -1197,6 +1160,10 @@ static void daemon_show_info( const char *cmdline, int argc, char **argv )
 	 daemon_ok( CODE_OK, "ok", NULL );
 	 return;
       } else {
+#ifdef USE_PLUGIN
+	 call_dictdb_free (DictConfig->dbl);
+#endif
+
 	 dict_destroy_list( list );
 	 daemon_printf( "%d information for %s\n",
 			CODE_DATABASE_INFO, argv[2] );
@@ -1282,8 +1249,8 @@ static void daemon_show_server( const char *cmdline, int argc, char **argv )
 	    data_size,
 	    data_size_uom,
 
-	    data_size,
-	    data_size_uom);
+	    data_length,
+	    data_length_uom);
       }
    }
 
@@ -1341,7 +1308,7 @@ static void daemon_auth( const char *cmdline, int argc, char **argv )
       daemon_printf( "%d syntax error, illegal parameters\n",
 		     CODE_ILLEGAL_PARAM );
    if (!h || !(secret = hsh_retrieve(h, argv[1]))) {
-      daemon_log( DICT_LOG_AUTH, "%s@%s/%s denied: no invalid username\n",
+      daemon_log( DICT_LOG_AUTH, "%s@%s/%s denied: invalid username\n",
                   argv[1], daemonHostname, daemonIP );
       daemon_printf( "%d auth denied\n", CODE_AUTH_DENIED );
       return;
@@ -1356,7 +1323,7 @@ static void daemon_auth( const char *cmdline, int argc, char **argv )
    MD5Final(digest, &ctx);
 
    for (i = 0; i < 16; i++)
-      snprintf( hex+2*i, 2, "%02x", digest[i] );
+      snprintf( hex+2*i, 3, "%02x", digest[i] );
 
    hex[32] = '\0';
 

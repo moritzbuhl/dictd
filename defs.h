@@ -16,7 +16,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: defs.h,v 1.2 2003/04/10 18:52:32 cheusov Exp $
+ * $Id: defs.h,v 1.6 2003/11/03 00:28:52 cheusov Exp $
  */
 
 #ifndef _DEFS_H_
@@ -49,9 +49,17 @@
 #define DICT_FLAG_ALLCHARS       DICT_ENTRY_PREFIX"-allchars"
 #define DICT_FLAG_VIRTUAL        DICT_ENTRY_PREFIX"-virtual"
 
+#define DICT_ENTRY_PLUGIN        DICT_ENTRY_PREFIX"-plugin"
+#define DICT_ENTRY_PLUGIN_DATA   DICT_ENTRY_PREFIX"-plugin-data"
+
+#define DICT_PLUGINFUN_OPEN      "dictdb_open"
+#define DICT_PLUGINFUN_ERROR     "dictdb_error"
+#define DICT_PLUGINFUN_FREE      "dictdb_free"
+#define DICT_PLUGINFUN_SEARCH    "dictdb_search"
+#define DICT_PLUGINFUN_CLOSE     "dictdb_close"
+#define DICT_PLUGINFUN_SET       "dictdb_set"
 
 				/* End of configurable things */
-
 
 #define BUFFERSIZE 10240
 
@@ -115,7 +123,7 @@ typedef struct dictData {
    const char    *filename;
    z_stream      zStream;
    int           initialized;
-   
+
    int           headerLength;
    int           method;
    int           flags;
@@ -136,6 +144,8 @@ typedef struct dictData {
 } dictData;
 
 typedef struct dictPlugin {
+   void *      data;
+
 #ifdef USE_PLUGIN
    lt_dlhandle handle;
 
@@ -145,9 +155,9 @@ typedef struct dictPlugin {
    dictdb_free_type   dictdb_free;
    dictdb_error_type  dictdb_error;
    dictdb_close_type  dictdb_close;
-#endif
-   void *      data;
 
+   char dictdb_free_called; /* 1 after dictdb_free call */
+#endif
 } dictPlugin;
 
 typedef struct dictIndex {
@@ -183,6 +193,8 @@ typedef struct dictDatabase {
    dictIndex  *index;
    dictIndex  *index_suffix;
    dictIndex  *index_word;
+
+   int        *strategy_disabled; /* disable_strategy keyword*/
 
    lst_List   *virtual_db_list;
 

@@ -16,13 +16,24 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: strategy.h,v 1.2 2003/03/19 16:43:28 cheusov Exp $
+ * $Id: strategy.h,v 1.4 2003/11/03 00:28:52 cheusov Exp $
  */
 
 #ifndef _STRATEGY_H_
 #define _STRATEGY_H_
 
 #include "dictP.h"
+
+/* search strategies*/
+#define DICT_EXACT        1     /* Exact */ 
+#define DICT_PREFIX       2     /* Prefix */ 
+#define DICT_SUBSTRING    3     /* Substring */ 
+#define DICT_SUFFIX       4     /* Suffix */ 
+#define DICT_RE           5     /* POSIX 1003.2 (modern) regular expressions */ 
+#define DICT_REGEXP       6     /* old (basic) regular expresions */ 
+#define DICT_SOUNDEX      7     /* Soundex */ 
+#define DICT_LEVENSHTEIN  8     /* Levenshtein */ 
+#define DICT_WORD         9     /* Word */
 
 #define DICT_DEFAULT_STRATEGY    DICT_LEVENSHTEIN
 
@@ -45,6 +56,7 @@ extern void dict_add_strategy (const char *strat, const char *description);
 
 /* */
 extern int get_strategy_count (void);
+extern int get_max_strategy_num (void);
 extern dictStrategy **get_strategies (void);
 extern int lookup_strategy( const char *strategy );
 

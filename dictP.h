@@ -19,7 +19,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: dictP.h,v 1.10 2003/04/10 18:52:32 cheusov Exp $
+ * $Id: dictP.h,v 1.15 2003/10/31 00:40:04 cheusov Exp $
  * 
  */
 
@@ -29,6 +29,13 @@
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
+
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/utsname.h>
+#include <sys/wait.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 #ifndef __GNUC__
 #define __FUNCTION__ __FILE__
@@ -69,6 +76,12 @@
 #  define memcpy(d, s, n) bcopy ((s), (d), (n))
 #  define memmove(d, s, n) bcopy ((s), (d), (n))
 # endif
+#endif
+
+#if HAVE_SIZE_T
+#include <stddef.h>
+#else
+typedef unsigned int size_t;
 #endif
 
 #if !HAVE_STRDUP
@@ -114,6 +127,14 @@ typedef unsigned int wchar_t;
 typedef char mbstate_t;
 #endif
 
+#if !HAVE_STRLCPY
+extern size_t strlcpy (char *s, const char * wc, size_t size);
+#endif
+
+#if !HAVE_STRLCAT
+size_t strlcat(char *dst, const char *src, size_t siz);
+#endif
+
 #if !HAVE_WCRTOMB
 extern size_t wcrtomb (char *s, wchar_t wc, mbstate_t *ps);
 #endif
@@ -132,6 +153,10 @@ extern size_t mbrtowc (wchar_t *pwc, const char *s, size_t n, mbstate_t *ps);
 
 #if !HAVE_MBSTOWCS
 extern size_t mbstowcs (wchar_t *dest, const char *src, size_t n);
+#endif
+
+#if !HAVE_SETENV
+extern int setenv(const char *name, const char *value, int overwrite);
 #endif
 
 #if !HAVE_MBTOWC
@@ -221,6 +246,19 @@ situations that we know about. */
 
 #if HAVE_LIMITS_H
 #include <limits.h>
+#endif
+
+/* Handle getopt correctly */
+#if HAVE_GETOPT_H
+# include <getopt.h>
+#else
+#if !HAVE_GETOPT_LONG
+int getopt_long(int argc, char * const argv[],
+                  const char *optstring,
+                  const struct option *longopts, int *longindex);
+extern int  optind;
+extern char *optarg;
+#endif
 #endif
 
 				/* Local stuff */

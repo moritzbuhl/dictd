@@ -17,14 +17,15 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: strategy.c,v 1.2 2003/03/19 16:43:28 cheusov Exp $
+ * $Id: strategy.c,v 1.5 2003/10/31 00:40:03 cheusov Exp $
  * 
  */
+
+#include "dictP.h"
 
 #include "strategy.h"
 #include "dictdplugin.h"
 #include "maa.h"
-#include "dictd.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -102,6 +103,16 @@ dictStrategy **get_strategies (void)
    return strategies;
 }
 
+int get_max_strategy_num (void)
+{
+   int i = get_strategy_count ();
+   if (i){
+      return get_strategies () [i-1]->number;
+   }else{
+      return -1;
+   }
+}
+
 static int lookup_strategy_index ( const char *strategy )
 {
    int i;
@@ -167,8 +178,7 @@ void dict_disable_strategies (const char *strats)
    const char *s = NULL;
    dictStrategy *si = NULL;
 
-   strncpy (buffer, strats, sizeof (buffer) - 1);
-   buffer [sizeof (buffer) - 1] = '\0';
+   strlcpy (buffer, strats, sizeof (buffer));
 
    for (i = 0; i < len; ++i){
       if (',' == buffer [i])

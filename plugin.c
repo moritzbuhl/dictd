@@ -1,6 +1,5 @@
 /* index.c -- 
  * Created: Sat Mar 15 16:47:42 2003 by Aleksey Cheusov <vle@gmx.net>
- * Copyright 1996, 1997, 1998, 2000, 2002 Rickard E. Faith (faith@dict.org)
  * 
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -16,15 +15,17 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: plugin.c,v 1.2 2003/04/10 18:52:32 cheusov Exp $
+ * $Id: plugin.c,v 1.11 2003/11/03 00:28:52 cheusov Exp $
  * 
  */
 
+#include "dictP.h"
+
+#include "dictd.h"
 #include "plugin.h"
 #include "strategy.h"
 #include "data.h"
 #include "index.h"
-#include "dictd.h"
 
 #ifndef HAVE_DLFCN_H
 #include <ltdl.h>
@@ -67,6 +68,8 @@ int dict_search_plugin (
       &ret,
       extra_data, extra_data_size,
       &defs, &defs_sizes, &defs_count);
+
+   database -> plugin -> dictdb_free_called = 1;
 
    if (extra_result)
       *extra_result = ret;
@@ -118,7 +121,11 @@ int dict_search_plugin (
 	    def -> def_size = len;
 	 }
 
-	 lst_push (l, def);
+	 if (ret == DICT_PLUGIN_RESULT_PREPROCESS){
+	    lst_push (l, def);
+	 }else{
+	    lst_append (l, def);
+	 }
       }
 
       return defs_count;
@@ -158,7 +165,9 @@ static char *dict_plugin_data (const dictDatabase *db, const dictWord *dw)
    return p;
 }
 
-static int plugin_initdata_set_data (
+/* set data fields from 00-database-plugin-data entry */
+/* return a number of inserted items */
+static int plugin_initdata_set_data_file (
    dictPluginData *data, int data_size,
    const dictDatabase *db)
 {
@@ -166,9 +175,6 @@ static int plugin_initdata_set_data (
    int ret = 0;
    lst_List list;
    dictWord *dw;
-
-   if (!db -> index)
-      return 0;
 
    if (data_size <= 0)
       err_fatal (__FUNCTION__, "invalid initial array size");
@@ -179,7 +185,7 @@ static int plugin_initdata_set_data (
       list, DICT_ENTRY_PLUGIN_DATA, db, DICT_EXACT);
 
    if (0 == ret){
-      lst_destroy (list);
+      dict_destroy_list (list);
       return 0;
    }
 
@@ -187,16 +193,47 @@ static int plugin_initdata_set_data (
    plugin_data = dict_plugin_data (db, dw);
 
    dict_destroy_datum (dw);
-   if (2 == ret)
-      dict_destroy_datum (lst_pop (list));
 
    data -> id   = DICT_PLUGIN_INITDATA_DICT;
    data -> data = plugin_data;
    data -> size = -1;
 
-   lst_destroy (list);
+   dict_destroy_list (list);
 
    return 1;
+}
+
+/* set data fields from db -> plugin_data */
+/* return a number of inserted items */
+static int plugin_initdata_set_data_array (
+   dictPluginData *data, int data_size,
+   const dictDatabase *db)
+{
+   if (data_size <= 0)
+      err_fatal (__FUNCTION__, "invalid initial array size");
+
+   if (db -> plugin_data){
+      data [0].id   = DICT_PLUGIN_INITDATA_DICT;
+      data [0].data = xstrdup (db -> plugin_data);
+      data [0].size = -1;
+
+      return 1;
+   }else{
+      return 0;
+   }
+}
+
+/* return a number of inserted items */
+static int plugin_initdata_set_data (
+   dictPluginData *data, int data_size,
+   const dictDatabase *db)
+{
+   if (db -> plugin_data)
+      return plugin_initdata_set_data_array (data, data_size, db);
+   else if (db -> index)
+      return plugin_initdata_set_data_file (data, data_size, db);
+   else
+      return 0;
 }
 
 static int plugin_initdata_set_dbnames (dictPluginData *data, int data_size)
@@ -233,7 +270,10 @@ static int plugin_initdata_set_dbnames (dictPluginData *data, int data_size)
    return count;
 }
 
-static int plugin_initdata_set_stratnames (dictPluginData *data, int data_size)
+static int plugin_initdata_set_stratnames (
+   dictPluginData *data,
+   int data_size,
+   const dictDatabase *db)
 {
    dictStrategy **strats;
    int count;
@@ -250,28 +290,49 @@ static int plugin_initdata_set_stratnames (dictPluginData *data, int data_size)
    strats = get_strategies ();
 
    for (i = 0; i < count; ++i){
-      data -> id   = DICT_PLUGIN_INITDATA_STRATEGY;
-
       if (
-	 strlen (strats [i] -> name) + 1 >
-	 sizeof (datum.name))
+	 !db -> strategy_disabled ||
+	 !db -> strategy_disabled [strats [i] -> number])
       {
-	 err_fatal (__FUNCTION__, "too small initial array");
+	 data -> id   = DICT_PLUGIN_INITDATA_STRATEGY;
+
+	 if (
+	    strlen (strats [i] -> name) + 1 >
+	    sizeof (datum.name))
+	 {
+	    err_fatal (__FUNCTION__, "too small initial array");
+	 }
+
+	 datum.number = strats [i] -> number;
+	 strcpy (datum.name, strats [i] -> name);
+
+	 data -> size = sizeof (datum);
+	 data -> data = xmalloc (sizeof (datum));
+
+	 memcpy ((void *) data -> data, &datum, sizeof (datum));
+
+	 ++data;
+	 ++ret;
       }
-
-      datum.number = strats [i] -> number;
-      strcpy (datum.name, strats [i] -> name);
-
-      data -> size = sizeof (datum);
-      data -> data = xmalloc (sizeof (datum));
-
-      memcpy ((void *) data -> data, &datum, sizeof (datum));
-
-      ++data;
-      ++ret;
    }
 
    return ret;
+}
+
+static int plugin_initdata_set_defdbdir (dictPluginData *data, int data_size)
+{
+   const dictDatabase *db;
+   int count;
+   int i;
+
+   if (data_size <= 0)
+      err_fatal (__FUNCTION__, "too small initial array");
+
+   data -> size = -1;
+   data -> data = xstrdup (DICT_DICTIONARY_PATH);
+   data -> id   = DICT_PLUGIN_INITDATA_DEFDBDIR;
+
+   return 1;
 }
 
 /* all dict [i]->data are xmalloc'd*/
@@ -282,11 +343,15 @@ static int plugin_initdata_set (
    int count = 0;
    dictPluginData *p = data;
 
+   count = plugin_initdata_set_defdbdir (data, data_size);
+   data      += count;
+   data_size -= count;
+
    count = plugin_initdata_set_dbnames (data, data_size);
    data      += count;
    data_size -= count;
 
-   count = plugin_initdata_set_stratnames (data, data_size);
+   count = plugin_initdata_set_stratnames (data, data_size, db);
    data      += count;
    data_size -= count;
 
@@ -348,10 +413,8 @@ static char *dict_plugin_filename (
       strcpy (filename, DICT_PLUGIN_PATH);
       strcat (filename, p);
    }else{
-      strncpy (filename, p, sizeof (filename) - 1);
+      strlcpy (filename, p, sizeof (filename));
    }
-
-   filename [sizeof (filename) - 1] = 0;
 
    xfree (buf);
 
@@ -438,7 +501,7 @@ static dictPlugin *create_plugin (
    PRINTF(DBG_INIT, (":I:     opening plugin\n"));
    plugin -> handle = lt_dlopen (plugin_filename);
    if (!plugin -> handle){
-      PRINTF(DBG_INIT, (":I:     faild\n"));
+      PRINTF(DBG_INIT, (":I:     faild: %s\n", dlerror ()));
       exit (1);
    }
 
@@ -457,54 +520,46 @@ int dict_plugin_init (dictDatabase *db)
 {
    int ret = 0;
    lst_List list;
-   const char *plugin_filename;
+   const char *plugin_filename = NULL;
    dictWord *dw;
 
    dictPluginData init_data [3000];
-   int init_data_size;
+   int init_data_size = 0;
 
-   init_data_size = plugin_initdata_set (
-      init_data, sizeof (init_data)/sizeof (init_data [0]),
-      db);
+   if (db -> pluginFilename){
+      plugin_filename = db -> pluginFilename;
+   }else if (db -> index){
 
-   if (db -> plugin_db){
-      init_data [init_data_size].id   = DICT_PLUGIN_INITDATA_DICT;
-      init_data [init_data_size].data = db -> plugin_data;
-      init_data [init_data_size].size = -1;
+      list = lst_create ();
 
-      db -> plugin = create_plugin (
-	 db -> pluginFilename,
-	 init_data, init_data_size + 1);
-   }else{
-      if (db -> index){
-	 list = lst_create ();
+      ret = dict_search_database_ (list, DICT_ENTRY_PLUGIN, db, DICT_EXACT);
+      switch (ret){
+      case 1: case 2:
+	 dw = (dictWord *) lst_pop (list);
 
-	 ret = dict_search_database_ (list, DICT_ENTRY_PLUGIN, db, DICT_EXACT);
-	 switch (ret){
-	 case 1: case 2:
-	    dw = (dictWord *) lst_pop (list);
+	 plugin_filename = dict_plugin_filename (db, dw);
 
-	    plugin_filename = dict_plugin_filename (db, dw);
-
-	    dict_destroy_datum (dw);
-	    if (2 == ret)
-	       dict_destroy_datum (lst_pop (list));
-
-	    db -> plugin = create_plugin (
-	       plugin_filename, init_data, init_data_size);
-
-	    break;
-	 case 0:
-	    break;
-	 default:
-	    err_internal( __FUNCTION__, "Corrupted .index file'\n" );
-	 }
-
-	 lst_destroy (list);
+	 dict_destroy_datum (dw);
+	 break;
+      case 0:
+	 break;
+      default:
+	 err_internal( __FUNCTION__, "Corrupted .index file'\n" );
       }
+
+      dict_destroy_list (list);
    }
 
-   plugin_init_data_free (init_data, init_data_size);
+   if (plugin_filename){
+      init_data_size = plugin_initdata_set (
+	 init_data, sizeof (init_data)/sizeof (init_data [0]),
+	 db);
+
+      db -> plugin = create_plugin (
+	 plugin_filename, init_data, init_data_size);
+
+      plugin_init_data_free (init_data, init_data_size);
+   }
 
    return 0;
 }
@@ -537,16 +592,31 @@ void dict_plugin_destroy ( dictDatabase *db )
 
 static int call_dictdb_free1 (const void *datum)
 {
-   const dictWord     *dw = (dictWord *)datum;
-   const dictDatabase *db = dw -> database;
+   const dictDatabase *db = (const dictDatabase *) datum;
 
-   if (db -> plugin)
-      db -> plugin -> dictdb_free (db -> plugin -> data);
+   if (db -> plugin){
+      if (db -> plugin -> dictdb_free_called){
+	 db -> plugin -> dictdb_free (db -> plugin -> data);
+
+	 db -> plugin -> dictdb_free_called = 0;
+      }
+   }
 
    return 0;
 }
 
-void call_dictdb_free (lst_List list)
+void call_dictdb_free (lst_List db_list)
 {
-   lst_iterate (list, call_dictdb_free1);
+   const dictDatabase *db = NULL;
+   lst_Position pos;
+
+   LST_ITERATE (db_list, pos, db){
+      if (db -> plugin){
+	 if (db -> plugin -> dictdb_free_called){
+	    db -> plugin -> dictdb_free (db -> plugin -> data);
+
+	    db -> plugin -> dictdb_free_called = 0;
+	 }
+      }
+   }
 }

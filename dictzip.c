@@ -17,7 +17,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: dictzip.c,v 1.22 2003/03/19 16:43:26 cheusov Exp $
+ * $Id: dictzip.c,v 1.25 2003/12/08 17:14:47 cheusov Exp $
  * 
  */
 
@@ -167,7 +167,7 @@ int dict_data_zip( const char *inFilename, const char *outFilename,
    if (st.st_size % chunkLength) ++chunks;
    PRINTF(DBG_VERBOSE,("%lu chunks * %u per chunk = %lu (filesize = %lu)\n",
 			chunks, chunkLength, chunks * chunkLength,
-			st.st_size ));
+			(unsigned long) st.st_size ));
    dataLength   = chunks * 2;
    extraLength  = 10 + dataLength;
    headerLength = GZ_FEXTRA_START
@@ -233,12 +233,12 @@ int dict_data_zip( const char *inFilename, const char *outFilename,
 	 total += count;
 	 if (dbg_test( DBG_VERBOSE )) {
 	    printf( "chunk %5lu: %lu of %lu total\r",
-		    chunk, total, st.st_size );
+		    chunk, total, (unsigned long) st.st_size );
 	    fflush( stdout );
 	 }
       }
    }
-   PRINTF(DBG_VERBOSE,("total: %lu chunks, %lu bytes\n", chunks, st.st_size));
+   PRINTF(DBG_VERBOSE,("total: %lu chunks, %lu bytes\n", chunks, (unsigned long) st.st_size));
     
    /* Write last bit */
 #if 0
@@ -313,17 +313,16 @@ static const char *id_string( const char *id )
 
 static void banner( void )
 {
-   const char *id = "$Id: dictzip.c,v 1.22 2003/03/19 16:43:26 cheusov Exp $";
+   const char *id = "$Id: dictzip.c,v 1.25 2003/12/08 17:14:47 cheusov Exp $";
    
    fprintf( stderr, "%s %s\n", err_program_name(), id_string( id ) );
    fprintf( stderr,
-	    "Copyright 1996-2002 Rickard E. Faith (faith@dict.org)\n" );
+	    "Copyright 1996-2002 Rickard E. Faith (faith@dict.org)\n\n" );
 }
 
 static void license( void )
 {
    static const char *license_msg[] = {
-     "",
      "This program is free software; you can redistribute it and/or modify it",
      "under the terms of the GNU General Public License as published by the",
      "Free Software Foundation; either version 1, or (at your option) any",
@@ -343,10 +342,12 @@ static void license( void )
    banner();
    while (*p) fprintf( stderr, "   %s\n", *p++ );
 }
-    
+
 static void help( void )
 {
    static const char *help_msg[] = {
+      "Usage: dictzip [options] name",
+      "",
       "-d --decompress      decompress",
       "-f --force           force overwrite of output file",
       "-h --help            give this help",
@@ -489,7 +490,8 @@ int main( int argc, char **argv )
 	    }
 	    dict_data_close( header );
 	 } else {
-	    strncpy( filename, argv[i], BUFFERSIZE-1 );
+	    strlcpy( filename, argv[i], BUFFERSIZE );
+
 	    if ((pt = strrchr( filename, '.' ))) *pt = '\0';
 	    else
 	       err_fatal( __FUNCTION__, "Cannot truncate filename\n" );

@@ -1,7 +1,7 @@
 /* dictfmt.c -- 
  * Created: Sun Jul 20 20:17:11 1997 by faith@acm.org
- * Revised: Sun Jul  5 19:25:18 1998 by faith@acm.org
- * Copyright 1997, 1998 Rickard E. Faith (faith@acm.org)
+ * Revised: Sat Sep 27 23:47:04 2003 by faith@acm.org
+ * Copyright 1997, 1998, 2003 Rickard E. Faith (faith@acm.org)
  * 
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -17,7 +17,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: dictfmt.c,v 1.23 2003/07/09 17:11:59 cheusov Exp $
+ * $Id: dictfmt.c,v 1.34 2003/12/08 17:30:02 cheusov Exp $
  *
  * Sun Jul 5 18:48:33 1998: added patches for Gutenberg's '1995 CIA World
  * Factbook' from David Frey <david@eos.lugs.ch>.
@@ -27,6 +27,8 @@
  */
 
 #include "dictP.h"
+#include "str.h"
+
 #include <maa.h>
 
 #include <stdio.h>
@@ -46,7 +48,7 @@
 #endif
 
 #define FMT_MAXPOS  200
-#define FMT_INDENT  0
+#define FMT_INDENT  5
 
 #define JARGON    1
 #define FOLDOC    2
@@ -54,6 +56,7 @@
 #define PERIODIC  4
 #define HITCHCOCK 5
 #define CIA1995   6
+#define VERA      7
 
 #define BSIZE 10240
 
@@ -194,56 +197,6 @@ static void fmt_string( const char *s )
    free(sdup);
 }
 
-#if HAVE_UTF8
-static int tolower_alnumspace_utf8 (const char *src, char *dest)
-{
-   wchar_t      ucs4_char;
-   size_t len;
-   int    len2;
-
-   while (src && src [0]){
-      len = mbtowc (&ucs4_char, src, MB_CUR_MAX);
-      if ((int) len < 0)
-	 return 0;
-
-      if (iswspace (ucs4_char)){
-	 *dest++ = ' ';
-      }else if (allchars_mode || iswalnum (ucs4_char)){
-	 len2 = wctomb (dest, towlower (ucs4_char));
-	 if (len2 < 0)
-	    return 0;
-
-	 dest += len2;
-      }
-
-      src += len;
-   }
-
-   *dest = 0;
-
-   return (src != NULL);
-}
-#endif
-
-static void tolower_alnumspace_8bit (const char *src, char *dest)
-{
-   int ch;
-
-   while (src && src [0]){
-      ch = *(const unsigned char *)src;
-
-      if (isspace (ch)){
-	 *dest++ = ' ';
-      }else if (allchars_mode || isalnum (ch)){
-	 *dest++ = tolower(ch);
-      }
-
-      ++src;
-   }
-
-   *dest = 0;
-}
-
 #ifdef HAVE_UTF8
 /*
   makes anagram of the 8-bit string 's'
@@ -355,7 +308,7 @@ static char *trim_left (char *s)
    int len;
 
    if (!utf8_mode){
-      while (isspace(*s)){
+      while (isspace((unsigned char) *s)){
 	 ++s;
       }
 
@@ -397,18 +350,10 @@ static void write_hw_to_index (const char *word, int start, int end)
 	 exit (1);
       }
 
-#if HAVE_UTF8
-      if (utf8_mode){
-	 if (!tolower_alnumspace_utf8 (word, new_word)){
-	    fprintf (stderr, "'%s' is not a UTF-8 string", word);
-	    exit (1);
-	 }
-      }else{
-	 tolower_alnumspace_8bit (word, new_word);
+      if (tolower_alnumspace (word, new_word, allchars_mode, utf8_mode)){
+	 fprintf (stderr, "'%s' is not a UTF-8 string", word);
+	 exit (1);
       }
-#else
-      tolower_alnumspace_8bit (word, new_word);
-#endif
 
       word = trim_right (new_word);
 
@@ -434,7 +379,7 @@ static int contain_nonascii_symbol (const char *word)
    return 0;
 }
 
-static void fmt_newheadword( const char *word, int flag )
+static void fmt_newheadword( const char *word )
 {
    static char prev[1024] = "";
    static int  start = 0;
@@ -494,39 +439,37 @@ static void fmt_newheadword( const char *word, int flag )
    }
 
    fmt_indent = 0;
-
+//   fmt_newline();
    fflush(stdout);
    end = ftell(str);
 
    if (fmt_str && *prev) {
       p = prev;
       do {
-	  sep = NULL;
-	  if (hw_separator [0] && !flag){
-	      sep = strstr (prev, hw_separator);
-	      if (sep)
-		  *sep = 0;
-	  }
+	 sep = NULL;
+	 if (hw_separator [0] &&
+	     strncmp (prev, "00-database", 11) &&
+	     strncmp (prev, "00database", 10))
+	 {
+	    sep = strstr (p, hw_separator);
+	    if (sep)
+	       *sep = 0;
+	 }
 
-	  write_hw_to_index (p, start, end);
+	 write_hw_to_index (p, start, end);
 
-	  if (!sep)
-	     break;
+	 if (!sep)
+	    break;
 
-	  p = sep + strlen (hw_separator);
+	 p = sep + strlen (hw_separator);
       }while (1);
    }
 
    if (word) {
-      strncpy(prev, word, sizeof (prev) - 1);
-      prev [sizeof (prev) - 1] = 0;
+      fmt_newline ();
+      strlcpy(prev, word, sizeof (prev));
 
       start = end;
-      if (flag) {
-	 fmt_string(word);
-	 fmt_indent += FMT_INDENT;
-	 fmt_newline();
-      }
    }
 
    if (!quiet_mode){
@@ -540,7 +483,7 @@ static void fmt_newheadword( const char *word, int flag )
 
 static void fmt_closeindex( void )
 {
-   fmt_newheadword(NULL,0);
+   fmt_newheadword (NULL);
    if (fmt_str){
       pclose( fmt_str );
    }
@@ -554,13 +497,12 @@ static void banner( FILE *out_stream )
 {
    fprintf( out_stream, "dictfmt v. %s December 2000 \n", DICT_VERSION );
    fprintf( out_stream,
-         "Copyright 1997-2000 Rickard E. Faith (faith@cs.unc.edu)\n" );
+         "Copyright 1997-2000 Rickard E. Faith (faith@cs.unc.edu)\n\n" );
 }
 
 static void license( void )
 {
    static const char *license_msg[] = {
-     "",
      "This program is free software; you can redistribute it and/or modify it",
      "under the terms of the GNU General Public License as published by the",
      "Free Software Foundation; either version 1, or (at your option) any",
@@ -584,7 +526,9 @@ static void license( void )
 static void help( FILE *out_stream )
 {
    static const char *help_msg[] = {
-     "usage: dictfmt [-jfephDLV] [-c5] -u url -s name basename",
+   "Usage: dictfmt [-c5|-t|-e|-f|-h|-j|-p] -u url -s name [options] basename",
+   "Create a dictionary databse and index file for use by a dictd server",
+   "",
      "-c5       headwords are preceded by a line containing at least \n\
                 5 underscore (_) characters",
      "-t        implies -c5, --without-headword and --without-info options",
@@ -594,8 +538,10 @@ static void help( FILE *out_stream )
      "-p        headwords are preceded by %p, with %d on following line",
      "-u <url>  URL of site where database was obtained",
      "-s <name> name of the database", 
-     "-L        display copyright and license information",
-     "-V        display version information",
+     "--license\n\
+-L        display copyright and license information",
+     "--version\n\
+-V        display version information",
      "-D        debug",
 "--quiet\n\
 --silent\n\
@@ -621,16 +567,6 @@ static void help( FILE *out_stream )
 
    banner( out_stream );
    while (*p) fprintf( out_stream, "%s\n", *p++ );
-}
-
-static char *strlwr_8bit (char *s)
-{
-   char *p;
-   for (p = s; *p; ++p){
-      *p = tolower ((unsigned char) *p);
-   }
-
-   return s;
 }
 
 static void set_utf8bit_mode (const char *loc)
@@ -662,20 +598,20 @@ static const char *sname = string_unknown;
 
 static void fmt_headword_for_url (void)
 {
-   fmt_newheadword("00-database-url",1);
+   fmt_newheadword("00-database-url");
    fmt_string( "     " );
    fmt_string( url );
-   fmt_newline();
 
    ignore_hw_url = 1;
 }
 
 static void fmt_headword_for_shortname (void)
 {
-   fmt_newheadword("00-database-short",1);
+   fmt_newheadword("00-database-short");
+   fmt_string ("00-database-short");
+   fmt_newline ();
    fmt_string( "     " );
    fmt_string( sname );
-   fmt_newline();
 
    ignore_hw_shortname = 1;
 }
@@ -685,7 +621,7 @@ static void fmt_headword_for_info (void)
    time_t     t;
    char       buffer[BSIZE];
 
-   fmt_newheadword("00-database-info",1);
+   fmt_newheadword("00-database-info");
 
    if (!without_time){
       fmt_string("This file was converted from the original database on:" );
@@ -709,7 +645,7 @@ static void fmt_headword_for_info (void)
    if (!without_header){
       fmt_string(
 	 "The original data was distributed with the notice shown below."
-	 "  No additional restrictions are claimed.  Please redistribute"
+	 " No additional restrictions are claimed.  Please redistribute"
 	 " this changed version under the same conditions and restriction"
 	 " that apply to the original version." );
       fmt_newline();
@@ -721,7 +657,7 @@ static void fmt_headword_for_info (void)
 static void fmt_headword_for_utf8 (void)
 {
    if (utf8_mode){
-      fmt_newheadword("00-database-utf8",1);
+      fmt_newheadword("00-database-utf8");
       fmt_newline();
    }
 }
@@ -729,7 +665,7 @@ static void fmt_headword_for_utf8 (void)
 static void fmt_headword_for_8bit (void)
 {
    if (bit8_mode){
-      fmt_newheadword("00-database-8bit",1);
+      fmt_newheadword("00-database-8bit");
       fmt_newline();
    }
 }
@@ -737,7 +673,7 @@ static void fmt_headword_for_8bit (void)
 static void fmt_headword_for_allchars (void)
 {
    if (allchars_mode){
-      fmt_newheadword("00-database-allchars",1);
+      fmt_newheadword("00-database-allchars");
       fmt_newline();
    }
 }
@@ -801,9 +737,11 @@ int main( int argc, char **argv )
       { "without-info",         0, 0, 509 },
       { "quiet",                0, 0, 'q' },
       { "silent",               0, 0, 'q' },
+      { "version",              0, 0, 'V' },
+      { "license",              0, 0, 'L' },
    };
 
-   while ((c = getopt_long( argc, argv, "qVLjfephDu:s:c:t",
+   while ((c = getopt_long( argc, argv, "qVLjvfephDu:s:c:t",
                                     longopts, NULL )) != EOF)
       switch (c) {
       case 'q': quiet_mode = 1;            break;
@@ -811,10 +749,11 @@ int main( int argc, char **argv )
       case 'V': banner( stdout ); exit(1); break;
       case 501: help( stdout ); exit(1);   break;         
       case 'j': type = JARGON;             break;
-      case 'f': type = FOLDOC;             break;
+      case 'f': type = FOLDOC; fmt_maxpos=79; break;
       case 'e': type = EASTON;             break;
       case 'p': type = PERIODIC;           break;
       case 'h': type = HITCHCOCK;          break;
+      case 'v': type = VERA; fmt_maxpos=75;break;
       case 'D': ++Debug;                   break;
       case 'u': url = optarg;              break;
       case 's': sname = optarg;            break;
@@ -896,7 +835,7 @@ int main( int argc, char **argv )
 	    strcpy( buffer2, buffer );
 	    if ((pt = strchr( buffer2, ','))) {
 	       *pt = '\0';
-	       fmt_newheadword(buffer2, 0);
+	       fmt_newheadword(buffer2);
 	       if (without_hw)
 		  buf = NULL;
 	    }
@@ -948,7 +887,7 @@ int main( int argc, char **argv )
 	    case 'B':
 	       if ((pt = strstr( buffer+3, " - </B>" ))) {
 		  *pt = '\0';
-		  fmt_newheadword(buffer+3, 0);
+		  fmt_newheadword(buffer+3);
 		  fmt_indent += 3;
 		  memmove( buf, buffer+3, strlen(buffer+3)+1 );
 	       } else {
@@ -973,7 +912,7 @@ int main( int argc, char **argv )
 	       if (*s == ':') ++s;
 	       
 	       *pt = '\0';
-	       fmt_newheadword(buffer+1, 0);
+	       fmt_newheadword (buffer+1);
 	       memmove( buf, buffer+1, strlen(buffer+1));
 	       memmove( pt-1, s, strlen(s)+1 ); /* move \0 also */
 	    }
@@ -995,7 +934,7 @@ int main( int argc, char **argv )
 		  header = 1;
 		  continue;
 	       } else {
-		  fmt_newheadword(buffer+3,1);
+		  fmt_newheadword(buffer+3);
 		  continue;
 	       }
 	    } else if (buffer[1] == 'd') {
@@ -1004,12 +943,50 @@ int main( int argc, char **argv )
 	    break;
 	 }
 	 break;
+      case VERA:
+          switch (*buffer) {
+          case '@':
+              if (header && !strncmp(buffer, "@item ", 6)) {
+		 fmt_newheadword(buffer+6);
+              }
+              continue;
+          }
+          if (!header) {
+              fmt_string("This is a special GNU edition of V.E.R.A.,");
+              fmt_string("a list dealing with computational acronyms.");
+              fmt_newline();
+              fmt_string("Copyright 1993/2002 Oliver Heidelbach <ohei [at] snafu de>");
+              fmt_newline();
+              fmt_newline();
+              fmt_string(
+"Permission is granted to copy, distribute and/or modify this document"
+" under the terms of the GNU Free Documentation License, Version 1.1"
+" or any later version published by the Free Software Foundation;"
+" with no Invariant Sections, with no Front-Cover Texts, and with "
+" no Back-Cover Texts.");
+              fmt_newline();
+              fmt_newline();
+              fmt_string(
+"Within the above restrictions the distribution of this"
+" document is explicitly encouraged and I hope you'll find"
+" it of some value.");
+              fmt_newline();
+              fmt_newline();
+              fmt_string(
+"This dictionary has nothing to do with Systems Science Inc. "
+"or its products.");
+              fmt_newline();
+              ++header;
+          }
+          break;
       case FOLDOC:
-	 if (*buffer && *buffer != ' ' && *buffer != '\t') {
-	    if (header < 2) {
-	       ++header;
-	    } else {
-	       fmt_newheadword(buffer,1);
+	 ++header;
+	 if (header < 3){
+	    if (without_info)
+	       continue;
+	 }else{
+	    if (*buffer && *buffer != ' ' && *buffer != '\t') {
+	       fmt_newheadword(buffer);
 	       continue;
 	    }
 	 }
@@ -1031,7 +1008,7 @@ int main( int argc, char **argv )
 	    buf = trim_left (buf);
 
 	    if (*buf != '\0') {
-	       fmt_newheadword(buf,0);
+	       fmt_newheadword (buf);
 	       if (without_hw)
 		  buf = NULL;
 	    }
@@ -1043,9 +1020,11 @@ int main( int argc, char **argv )
       }
       if (buf){
 	 fmt_string(buf);
+	 fmt_indent = 0;
 	 fmt_newline();
+	 fmt_indent = FMT_INDENT;
       }
- skip:
+   skip:;
    }
 
    fmt_predefined_headwords_after ();
