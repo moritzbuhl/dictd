@@ -17,7 +17,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: dictd.c,v 1.104 2004/02/24 17:55:51 cheusov Exp $
+ * $Id: dictd.c,v 1.108 2004/03/24 09:17:45 cheusov Exp $
  * 
  */
 
@@ -669,9 +669,9 @@ static int init_database( const void *datum )
 
    init_database_alphabet (db);
    if (db -> alphabet){
-      PRINTF (DBG_INIT, (":I:   alphabet: %s\n", db -> alphabet));
+      PRINTF (DBG_INIT, (":I:     alphabet: %s\n", db -> alphabet));
    }else{
-      PRINTF (DBG_INIT, (":I:   alphabet: (NULL)\n"));
+      PRINTF (DBG_INIT, (":I:     alphabet: (NULL)\n"));
    }
 
    if (db->dataFilename){
@@ -896,7 +896,7 @@ const char *dict_get_banner( int shortFlag )
 {
    static char    *shortBuffer = NULL;
    static char    *longBuffer = NULL;
-   const char     *id = "$Id: dictd.c,v 1.104 2004/02/24 17:55:51 cheusov Exp $";
+   const char     *id = "$Id: dictd.c,v 1.108 2004/03/24 09:17:45 cheusov Exp $";
    struct utsname uts;
    
    if (shortFlag && shortBuffer) return shortBuffer;
@@ -1182,12 +1182,12 @@ static void init (const char *fn)
 
 static void destroy ()
 {
-   /*
-     tim_stop ("dictd");
-     maa_shutdown ();
-   */
-   src_destroy ();
-   str_destroy ();
+//   src_destroy ();
+//   str_destroy ();
+
+//   tim_stop ("dictd");
+   maa_shutdown ();
+
    dict_ltdl_close ();
    dict_destroy_strategies ();
 }
@@ -1232,9 +1232,7 @@ static void dict_test (
    }
 
 #ifdef USE_PLUGIN
-   if (count != 0){
-      call_dictdb_free (DictConfig->dbl);
-   }
+   call_dictdb_free (DictConfig->dbl);
 #endif
 
    dict_destroy_list (l);

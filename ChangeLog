@@ -1,3 +1,84 @@
+2004-03-24  Aleksey Cheusov  <vle at gmx.net}
+
+  * example_plugin_dbi.conf: revert --> reverse
+
+  * example_plugin_dbi.conf, configure.in, NEWS:
+  version ==> 1.9.13
+  another sample strategy for DBI plugin
+  NEWS file update
+
+  * dictd.c, dictdplugin_dbi.c:
+  code clean-ups
+
+  * plugin.c:
+  log plugin failure to stderr
+
+2004-03-23  Aleksey Cheusov  <vle at gmx.net}
+
+  * dictd.c, dictdplugin_dbi.c:
+  fixes for call dictdb_free
+
+2004-03-22  Aleksey Cheusov  <vle at gmx.net}
+
+  * index.c:
+  fixed: if database has no 00-database-alphabet headword,
+      "global" alphabet is built incorrectly. As a result
+      dictd may work (FreeBSD - affected) incorrectly with LEV strategy.
+      Affected versions: 1.9.12
+
+2004-03-21  Aleksey Cheusov  <vle at gmx.net}
+
+  * configure.in, dictdplugin_dbi.c, example_plugin_dbi.conf, Makefile.in:
+  ADDED: plugin using libdbi library for implementing DICT database using
+    SQL server. It is possible to specify custom search strategies
+    by specifying SQL query.
+
+    The following option are currently supported:
+
+      driverdir       - path to DBI drivers
+      drivername      - DBI driver name
+      option_host     - host to connect to
+      option_port     - port to connect to
+      option_dbname   - database name
+      option_username - user name for authorizing to SQL server
+      option_password - user password for authorizing to SQL server
+      query_define    -        SQL query for implementing DEFINE command
+      query_<SEARCHSTRATEGY> - SQL query for implementing
+             SEARCHSTRATEGY (MATCH command).
+             SEARCHSTRATEGY is not limited to the "standard" strategies.
+
+    See the file example_plugin_dbi.conf for sample of how
+      this plugin can be configured.
+
+    SQL queries should return 1-column result by using SELECT command.
+      %q sequence inside SQL query is expanded to user's query.
+      %% is expanded to single % sign.
+
+    This plugin obviously gives a simplest way to implement editable
+      dictionaries, not by DICT protocol, but, for example, with a help
+      of WEB interface.
+
+    Hack! To resolv DBI driver's symbols, dictd is currently linked with
+    libdbi. Later, this will be fixed.
+
+2004-03-19  Aleksey Cheusov  <vle at gmx.net}
+
+  * dictd.c, dictdplugin_judy.c, lev.h, plugin.c:
+  code clean-ups
+  debugging code 'fprintf (stderr' code has been removed
+
+2004-03-18  Aleksey Cheusov  <vle at gmx.net}
+
+  * dictdplugin_judy.c, heap.h, plugins_common.c, plugins_common.h:
+  functions, common to plugins have been moved to plugins_common.{h,c}
+
+  * heap.c:
+  HEAP_MAGIC number is cheched by every heap_XXX function. (assert(3))
+
+  * dictd.c, libmaa/maa.c:
+  maa_shutdown function is not called automatically
+      when application terminates. Run it explicitly.
+
 2004-03-11  Aleksey Cheusov  <vle at gmx.net}
 
   * configure.in, Makefile.in, NEWS:
