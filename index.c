@@ -17,14 +17,14 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: index.c,v 1.64 2003/04/07 14:21:14 cheusov Exp $
+ * $Id: index.c,v 1.69 2003/07/15 10:55:57 cheusov Exp $
  * 
  */
 
 #include "dictP.h"
 #include "dictzip.h"
 #include "index.h"
-#include "regex.h"
+#include "include_regex.h"
 #include "strategy.h"
 
 #ifdef USE_PLUGIN
@@ -1009,6 +1009,25 @@ static int dict_search_word(
    }
 }
 
+/* return non-zero if success, 0 otherwise */
+static int dict_match (
+   const regex_t *re,
+   const char *word, size_t word_len,
+   int eflags)
+{
+#if defined(REG_STARTEND)
+   regmatch_t    subs[1];
+   subs [0].rm_so = 0;
+   subs [0].rm_eo = word_len;
+   return !regexec(re, word, 1, subs, eflags | REG_STARTEND);
+#else
+   char *word_copy = (char *) alloca (word_len + 1);
+   memcpy (word_copy, word, word_len);
+   word_copy [word_len] = 0;
+   return !regexec(re, word_copy, 0, NULL, eflags);
+#endif
+}
+
 static int dict_search_regexpr( lst_List l,
 				const char *word,
 				const dictDatabase *database,
@@ -1023,14 +1042,17 @@ static int dict_search_regexpr( lst_List l,
    regex_t       re;
    char          erbuf[100];
    int           err;
-   regmatch_t    subs[1];
    unsigned char first;
    const char    *previous = NULL;
 
    assert (dbindex);
 
    if (optStart_mode){
-      if (*word == '^' && dbindex -> isspacealnum [(unsigned char) word[1]]) {
+      if (
+	 *word == '^'
+	 && dbindex -> isspacealnum [(unsigned char) word[1]]
+	 && strchr (word, '|') == NULL)
+      {
 	 first = word[1];
 
 	 end   = dbindex->optStart[i2c(c2i(first)+1)];
@@ -1050,10 +1072,9 @@ static int dict_search_regexpr( lst_List l,
    pt = start;
    while (pt && pt < end) {
       for (p = pt; *p != '\t' && p < end; ++p);
-      subs[0].rm_so = 0;
-      subs[0].rm_eo = p - pt;
       ++_dict_comparisons;
-      if (!regexec(&re, pt, 1, subs, REG_STARTEND)) {
+
+      if (dict_match (&re, pt, p - pt, 0)) {
 	 if (!previous || altcompare(previous, pt, end)) {
 	    ++count;
 	    datum = dict_word_create( previous = pt, database, dbindex );
@@ -1087,7 +1108,7 @@ static int dict_search_regexp( lst_List l,
 			       const dictDatabase *database,
 			       dictIndex    *dbindex)
 {
-   return dict_search_regexpr( l, word, database, dbindex, REG_BASIC );
+   return dict_search_regexpr( l, word, database, dbindex, 0 /*REG_BASIC*/ );
 }
 
 static int dict_search_soundex( lst_List l,
@@ -1195,12 +1216,17 @@ static int dict_search_levenshtein( lst_List l,
       CHECK;
    }
                                 /* Transpositions */
+   strcpy( buf, word );
    for (i = 1; i < len; i++) {
-      strcpy( buf, word );
       tmp = buf[i-1];
       buf[i-1] = buf[i];
       buf[i] = tmp;
+
       CHECK;
+
+      tmp = buf[i-1];
+      buf[i-1] = buf[i];
+      buf[i] = tmp;
    }
 
 				/* Insertions */
@@ -1215,21 +1241,22 @@ static int dict_search_levenshtein( lst_List l,
 	 CHECK;
       }
    }
-                                /* Insertions at the end */
-   strcpy( buf, word );
-   buf[ len + 1 ] = '\0';
+                                /* Insertions at the beginning */
+   strcpy( buf + 1, word );
    for (k = 0; k < charcount; k++) {
-      buf[ len ] = c(k);
+      buf[ 0 ] = c(k);
       CHECK;
    }
 
    
                                   /* Substitutions */
+   strcpy( buf, word );
    for (i = 0; i < len; i++) {
-      strcpy( buf, word );
       for (j = 0; j < charcount; j++) {
+	 tmp = buf [i];
          buf[i] = c(j);
 	 CHECK;
+	 buf [i] = tmp;
       }
    }
 

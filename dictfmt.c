@@ -17,7 +17,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: dictfmt.c,v 1.17 2003/03/19 16:43:26 cheusov Exp $
+ * $Id: dictfmt.c,v 1.23 2003/07/09 17:11:59 cheusov Exp $
  *
  * Sun Jul 5 18:48:33 1998: added patches for Gutenberg's '1995 CIA World
  * Factbook' from David Frey <david@eos.lugs.ch>.
@@ -45,7 +45,7 @@
 #include <getopt.h>
 #endif
 
-#define FMT_MAXPOS 65
+#define FMT_MAXPOS  200
 #define FMT_INDENT  0
 
 #define JARGON    1
@@ -68,10 +68,12 @@ static int allchars_mode = 0;
 static int quiet_mode    = 0;
 
 static const char *hw_separator = "";
+
 static int         without_hw     = 0;
 static int         without_header = 0;
 static int         without_url    = 0;
 static int         without_time   = 0;
+static int         without_info   = 0;
 
 static FILE *fmt_str;
 static int  fmt_indent;
@@ -79,6 +81,11 @@ static int  fmt_pos;
 static int  fmt_pending;
 static int  fmt_hwcount;
 static int  fmt_maxpos = FMT_MAXPOS;
+static int  fmt_ignore_headword = 0;
+
+static int ignore_hw_url       = 0;
+static int ignore_hw_shortname = 0;
+static int ignore_hw_info      = 0;
 
 static const char *locale         = "C";
 
@@ -103,7 +110,11 @@ static void fmt_openindex( const char *filename )
 static void fmt_newline( void )
 {
    int i;
-   
+
+   if (fmt_ignore_headword){
+      return;
+   }
+
    fputc('\n', str);
    for (i = 0; i < fmt_indent; i++) fputc(' ', str);
    fmt_pos = fmt_indent;
@@ -112,13 +123,22 @@ static void fmt_newline( void )
 
 static void fmt_string( const char *s )
 {
-   char *sdup = malloc( strlen(s) + 1 );
-   char *pt = sdup;
-   char *p = sdup;
+   char *sdup = NULL;
+   char *pt   = NULL;
+   char *p    = NULL;
 #if 0
    char *t;
 #endif
    size_t  len;
+
+   assert (s);
+
+   if (fmt_ignore_headword){
+      return;
+   }
+
+   sdup = malloc( strlen(s) + 1 );
+   p = pt = sdup;
 
 #if 1
    strcpy( sdup, s );
@@ -136,7 +156,7 @@ static void fmt_string( const char *s )
       if (utf8_mode){
 	 len = mbstowcs (NULL, p, 0);
 	 if (len == (size_t) -1)
-	    err_fatal (__FUNCTION__, "invalid utf-8 string\n");
+	    err_fatal (__FUNCTION__, "invalid utf-8 string '%s'\n", s);
       }else{
 	 len = strlen (p);
       }
@@ -224,6 +244,142 @@ static void tolower_alnumspace_8bit (const char *src, char *dest)
    *dest = 0;
 }
 
+#ifdef HAVE_UTF8
+/*
+  makes anagram of the 8-bit string 's'
+  if length == -1 then str is 0-terminated string
+*/
+static void stranagram_8bit (char *s, int length)
+{
+   char* i = s;
+   char* j;
+   char v;
+
+   assert (s);
+
+   if (length == -1)
+      length = strlen (s);
+
+   j = s + length - 1;
+
+   while (i < j){
+      v = *i;
+      *i = *j;
+      *j = v;
+
+      ++i;
+      --j;
+   }
+}
+
+/*
+  makes anagram of the utf-8 string 's'
+  Returns non-zero if success, 0 otherwise
+*/
+static int stranagram_utf8 (char *s)
+{
+   size_t len;
+   char   *p;
+
+   mbstate_t ps;
+
+   assert (s);
+
+   memset (&ps,  0, sizeof (ps));
+
+   for (p = s; *p; ){
+      len = mbrlen (p, MB_CUR_MAX, &ps);
+      if ((int) len < 0)
+	 return 0; /* not a UTF-8 string */
+
+      if (len > 1)
+	 stranagram_8bit (p, len);
+
+      p += len;
+   }
+
+   stranagram_8bit (s, -1);
+   return 1;
+}
+
+#endif
+
+/*
+  Remove spaces at the end of the string
+ */
+static char *trim_right (char *s)
+{
+   wchar_t mbc;
+   int len;
+
+   if (!utf8_mode){
+      len = strlen (s);
+
+      while (len > 0 && isspace ((unsigned char) s [len - 1])){
+	 s [--len] = 0;
+      }
+
+      return s;
+   }else{
+#ifdef HAVE_UTF8
+      if (!stranagram_utf8 (s))
+	 abort ();
+
+      do {
+	 len = mbtowc (&mbc, s, MB_CUR_MAX);
+	 assert (len >= 0);
+
+	 if (len == 0 || !iswspace (mbc))
+	    break;
+
+	 s += len;
+      }while (1);
+
+      if (!stranagram_utf8 (s))
+	 abort ();
+
+#else
+      abort();
+#endif
+
+      return s;
+   }
+}
+
+/*
+  Remove spaces at the beginning of the string
+ */
+static char *trim_left (char *s)
+{
+   wchar_t mbc;
+   int len;
+
+   if (!utf8_mode){
+      while (isspace(*s)){
+	 ++s;
+      }
+
+      return s;
+   }else{
+#ifdef HAVE_UTF8
+      do {
+	 len = mbtowc (&mbc, s, MB_CUR_MAX);
+	 assert (len >= 0);
+
+	 if (len == 0 || !iswspace (mbc))
+	    break;
+
+	 s += len;
+      }while (1);
+
+#else
+      abort();
+#endif
+
+      return s;
+   }
+}
+
 static void write_hw_to_index (const char *word, int start, int end)
 {
    int len = 0;
@@ -254,11 +410,9 @@ static void write_hw_to_index (const char *word, int start, int end)
       tolower_alnumspace_8bit (word, new_word);
 #endif
 
-      while (len > 0 && isspace ((unsigned char) word [len - 1])){
-	 new_word [--len] = 0;
-      }
+      word = trim_right (new_word);
 
-      fprintf( fmt_str, "%s\t%s\t", new_word, b64_encode(start) );
+      fprintf( fmt_str, "%s\t%s\t", word, b64_encode(start) );
       fprintf( fmt_str, "%s\n", b64_encode(end-start) );
 
       free (new_word);
@@ -288,6 +442,50 @@ static void fmt_newheadword( const char *word, int flag )
    char *      sep   = NULL;
    char *      p;
 
+   if (
+      word &&
+      (!strcmp (word, "00-database-url") ||
+       !strcmp (word, "00databaseurl")))
+   {
+      if (ignore_hw_url){
+	 fmt_ignore_headword = 1;
+	 return;
+      }
+
+      /* we will ignore all the following occurences of 00-database-url*/
+      ignore_hw_url = 1;
+   }
+
+   if (
+      word &&
+      (!strcmp (word, "00-database-short") ||
+       !strcmp (word, "00databaseshort")))
+   {
+      if (ignore_hw_shortname){
+	 fmt_ignore_headword = 1;
+	 return;
+      }
+
+      /* we will ignore all the following occurences of 00-database-short*/
+      ignore_hw_shortname = 1;
+   }
+
+   if (
+      word &&
+      (!strcmp (word, "00-database-info") ||
+       !strcmp (word, "00databaseinfo")))
+   {
+      if (ignore_hw_info){
+	 fmt_ignore_headword = 1;
+	 return;
+      }
+
+      /* we will ignore all the following occurences of 00-database-short*/
+      ignore_hw_info = 1;
+   }
+
+   fmt_ignore_headword = 0;
+
    if (locale [0] == 'C' && locale [1] == 0){
       if (contain_nonascii_symbol (word)){
 	 fprintf (stderr, "\n8-bit head word \"%s\"is encountered while \"C\" locale is used\n", word);
@@ -296,7 +494,7 @@ static void fmt_newheadword( const char *word, int flag )
    }
 
    fmt_indent = 0;
-   if (*prev) fmt_newline();
+
    fflush(stdout);
    end = ftell(str);
 
@@ -389,6 +587,7 @@ static void help( FILE *out_stream )
      "usage: dictfmt [-jfephDLV] [-c5] -u url -s name basename",
      "-c5       headwords are preceded by a line containing at least \n\
                 5 underscore (_) characters",
+     "-t        implies -c5, --without-headword and --without-info options",
      "-e        file is in html format",
      "-f        headwords start in col 0, definitions start in col 8",
      "-j        headwords are set off by colons",
@@ -414,6 +613,9 @@ static void help( FILE *out_stream )
 "--without-header     header will not be copied to DB info entry",
 "--without-url        URL will not be copied to DB info entry",
 "--without-time       time of creation will not be copied to DB info entry",
+"--without-info       DB info entry will not be created.\n\
+                     This may be useful if 00-database-info headword\n\
+                     is expected from stdin (dictunformat outputs it).",
       0 };
    const char        **p = help_msg;
 
@@ -454,6 +656,125 @@ static void set_utf8bit_mode (const char *loc)
    free (locale_copy);
 }
 
+static const char string_unknown [] = "unknown";
+static const char *url = string_unknown;
+static const char *sname = string_unknown;
+
+static void fmt_headword_for_url (void)
+{
+   fmt_newheadword("00-database-url",1);
+   fmt_string( "     " );
+   fmt_string( url );
+   fmt_newline();
+
+   ignore_hw_url = 1;
+}
+
+static void fmt_headword_for_shortname (void)
+{
+   fmt_newheadword("00-database-short",1);
+   fmt_string( "     " );
+   fmt_string( sname );
+   fmt_newline();
+
+   ignore_hw_shortname = 1;
+}
+
+static void fmt_headword_for_info (void)
+{
+   time_t     t;
+   char       buffer[BSIZE];
+
+   fmt_newheadword("00-database-info",1);
+
+   if (!without_time){
+      fmt_string("This file was converted from the original database on:" );
+      fmt_newline();
+      time(&t);
+      snprintf( buffer, sizeof (buffer), "          %25.25s", ctime(&t) );
+      fmt_string( buffer );
+      fmt_newline();
+      fmt_newline();
+   }
+
+   if (!without_url){
+      fmt_string( "The original data is available from:" );
+      fmt_newline();
+      fmt_string( "     " );
+      fmt_string( url );
+      fmt_newline();
+      fmt_newline();
+   }
+
+   if (!without_header){
+      fmt_string(
+	 "The original data was distributed with the notice shown below."
+	 "  No additional restrictions are claimed.  Please redistribute"
+	 " this changed version under the same conditions and restriction"
+	 " that apply to the original version." );
+      fmt_newline();
+      fmt_indent += 3;
+      fmt_newline();
+   }
+}
+
+static void fmt_headword_for_utf8 (void)
+{
+   if (utf8_mode){
+      fmt_newheadword("00-database-utf8",1);
+      fmt_newline();
+   }
+}
+
+static void fmt_headword_for_8bit (void)
+{
+   if (bit8_mode){
+      fmt_newheadword("00-database-8bit",1);
+      fmt_newline();
+   }
+}
+
+static void fmt_headword_for_allchars (void)
+{
+   if (allchars_mode){
+      fmt_newheadword("00-database-allchars",1);
+      fmt_newline();
+   }
+}
+
+/* ...before reading the input */
+static void fmt_predefined_headwords_before ()
+{
+   fmt_headword_for_utf8 ();
+   fmt_headword_for_8bit ();
+   fmt_headword_for_allchars ();
+
+   if (url != string_unknown){
+      /*
+	-u option is not applied and we add 00-database-url headword
+      */
+      fmt_headword_for_url ();
+   }
+
+   if (sname != string_unknown){
+      /*
+	-s option is not applied and we add 00-database-short headword
+      */
+      fmt_headword_for_shortname ();
+   }
+
+   if (!without_info){
+      fmt_headword_for_info ();
+   }
+}
+
+/* ...after reading the input */
+static void fmt_predefined_headwords_after ()
+{
+   fmt_headword_for_url ();
+   fmt_headword_for_shortname ();
+}
+
 int main( int argc, char **argv )
 {
    int        c;
@@ -462,10 +783,8 @@ int main( int argc, char **argv )
    char       buffer2[BSIZE];
    char       indexname[1024];
    char       dataname[1024];
-   const char *url = "unknown";
-   const char *sname = "unknown";
+
    int        header = 0;
-   time_t     t;
    char       *pt;
    char       *s, *d;
    unsigned char *buf;
@@ -479,11 +798,12 @@ int main( int argc, char **argv )
       { "without-header",       0, 0, 506 },
       { "without-url",          0, 0, 507 },
       { "without-time",         0, 0, 508 },
+      { "without-info",         0, 0, 509 },
       { "quiet",                0, 0, 'q' },
       { "silent",               0, 0, 'q' },
    };
 
-   while ((c = getopt_long( argc, argv, "qVLjfephDu:s:c:",
+   while ((c = getopt_long( argc, argv, "qVLjfephDu:s:c:t",
                                     longopts, NULL )) != EOF)
       switch (c) {
       case 'q': quiet_mode = 1;            break;
@@ -513,6 +833,12 @@ int main( int argc, char **argv )
       case 506: without_header = 1;           break;
       case 507: without_url    = 1;           break;
       case 508: without_time   = 1;           break;
+      case 509: without_info   = 1;           break;
+      case 't':
+	 without_info = 1;
+	 without_hw   = 1;
+	 type = CIA1995;
+	 break;
       default:
          help (stderr);
 	 exit(1);
@@ -554,63 +880,7 @@ int main( int argc, char **argv )
       }
    }
 
-   if (utf8_mode){
-      fmt_newheadword("00-database-utf8",1);
-      fmt_string( "     " );
-   }
-
-   if (bit8_mode){
-      fmt_newheadword("00-database-8bit",1);
-      fmt_string( "     " );
-   }
-
-   if (allchars_mode){
-      fmt_newheadword("00-database-allchars",1);
-      fmt_string( "     " );
-   }
-
-   fmt_newheadword("00-database-url",1);
-   fmt_string( "     " );
-   fmt_string( url );
-
-   fmt_newheadword("00-database-short",1);
-   fmt_string( "     " );
-   fmt_string( sname );
-/*   fprintf (stderr, "%s\n", sname);*/
-
-   fmt_newheadword("00-database-info",1);
-
-   if (!without_time){
-      fmt_string("This file was converted from the original database on:" );
-      fmt_newline();
-      time(&t);
-      snprintf( buffer, sizeof (buffer), "          %25.25s", ctime(&t) );
-      fmt_string( buffer );
-      fmt_newline();
-      fmt_newline();
-   }
-
-   if (!without_url){
-      fmt_string( "The original data is available from:" );
-      fmt_newline();
-      fmt_string( "     " );
-      fmt_string( url );
-      fmt_newline();
-      fmt_newline();
-   }
-
-   if (!without_header){
-      fmt_string(
-	 "The original data was distributed with the notice shown below."
-	 "  No additional restrictions are claimed.  Please redistribute"
-	 " this changed version under the same conditions and restriction"
-	 " that apply to the original version." );
-      fmt_newline();
-      fmt_indent += 3;
-      fmt_newline();
-   }
-
-   fmt_maxpos = 200;		/* Don't wrap */
+   fmt_predefined_headwords_before ();
 
    while (fgets(buf = buffer,BSIZE-1,stdin)) {
       if (strlen(buffer))
@@ -757,9 +1027,8 @@ int main( int argc, char **argv )
 	    fgets(buf = buffer,BSIZE-1,stdin);
 	    if (strlen(buffer))
 	       buffer[strlen(buffer)-1] = '\0'; /* remove newline */
-	    
-	    while (isspace(*buf))
-	       buf++;
+
+	    buf = trim_left (buf);
 
 	    if (*buf != '\0') {
 	       fmt_newheadword(buf,0);
@@ -778,6 +1047,8 @@ int main( int argc, char **argv )
       }
  skip:
    }
+
+   fmt_predefined_headwords_after ();
 
    fmt_closeindex();
    fclose(str);

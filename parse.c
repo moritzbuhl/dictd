@@ -17,13 +17,15 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: parse.c,v 1.7 2002/08/02 19:43:15 faith Exp $
+ * $Id: parse.c,v 1.1 2003/07/07 12:24:16 cheusov Exp $
  *
  * \section{Parsing (and Lexing) Support}
  * 
  */
 
-#include "maaP.h"
+#include "dictP.h"
+#include "maa.h"
+#include "parse.h"
 
 static int           _prs_debug_flag   = 0;
 static const char    *_prs_cpp_options = NULL;
@@ -193,7 +195,6 @@ double prs_make_double( const char *string, int length )
    buffer[length] = '\0';
    return atof( buffer );
 }
-
 
 #ifdef SHARED_LIBMAA
 #if defined(__linux__) && defined(__ELF__)
