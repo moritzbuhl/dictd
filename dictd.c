@@ -17,7 +17,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: dictd.c,v 1.66 2003/02/10 19:24:25 cheusov Exp $
+ * $Id: dictd.c,v 1.66.2.1 2003/02/23 17:51:52 cheusov Exp $
  * 
  */
 
@@ -572,6 +572,9 @@ static int init_database( const void *datum )
       db->databaseShort = get_entry_info( db, DICT_SHORT_ENTRY_NAME );
    else if (*db->databaseShort == '@')
       db->databaseShort = get_entry_info( db, db->databaseShort + 1 );
+   else
+      db->databaseShort = xstrdup (db->databaseShort);
+
    if (!db->databaseShort)
       db->databaseShort = xstrdup (db->databaseName);
 
@@ -747,7 +750,7 @@ const char *dict_get_banner( int shortFlag )
 {
    static char    *shortBuffer = NULL;
    static char    *longBuffer = NULL;
-   const char     *id = "$Id: dictd.c,v 1.66 2003/02/10 19:24:25 cheusov Exp $";
+   const char     *id = "$Id: dictd.c,v 1.66.2.1 2003/02/23 17:51:52 cheusov Exp $";
    struct utsname uts;
    
    if (shortFlag && shortBuffer) return shortBuffer;

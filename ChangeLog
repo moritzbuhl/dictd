@@ -1,4 +1,17 @@
+2003-02-23  Aleksey Cheusov  <vle@gmx.net>
+
+  * configure.in:
+  version ==> 1.9.5
+
+  * dictd.c:
+  fixed: if the 'name' keyword is used in database section, and
+      it doesn't begin with '@', dictd may crash on SIGHUP.
+
+      Affected versions: 1.9.1-1.9.4.
 2003-02-15  Aleksey Cheusov  <vle@gmx.net>
+
+  * ChangeLog:
+  ChangeLog is up-to-date
 
   * configure.in:
   version ==> 1.9.4
