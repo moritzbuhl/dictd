@@ -17,7 +17,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: dictd.c,v 1.62 2003/01/17 06:58:56 cheusov Exp $
+ * $Id: dictd.c,v 1.66 2003/02/10 19:24:25 cheusov Exp $
  * 
  */
 
@@ -39,11 +39,20 @@
 #define GID_NOGROUP 65534
 #endif
 
+#ifndef HAVE_SNPRINTF
+extern int snprintf(char *str, size_t size, const char *format, ...);
+#endif
+
+#ifndef HAVE_VSNPRINTF
+extern int vsnprintf(char *str, size_t size, const char *format, va_list ap);
+#endif
+
 extern int        yy_flex_debug;
 
 extern int        default_strategy;
 
 extern int        utf8_mode;
+extern int        bit8_mode;
 extern int        mmap_mode;
 
 static int        _dict_daemon;
@@ -64,10 +73,12 @@ void dict_initsetproctitle( int argc, char **argv, char **envp )
    _dict_argvstart = argv[0];
    
    for (i = 0; envp[i]; i++) continue;
+
    if (i)
       _dict_argvlen = envp[i-1] + strlen(envp[i-1]) - _dict_argvstart;
    else
       _dict_argvlen = argv[argc-1] + strlen(argv[argc-1]) - _dict_argvstart;
+
    argv[1] = NULL;
 }
 
@@ -78,10 +89,12 @@ void dict_setproctitle( const char *format, ... )
    char    buf[MAXPROCTITLE];
 
    va_start( ap, format );
-   vsprintf( buf, format, ap );
+   vsnprintf( buf, MAXPROCTITLE, format, ap );
    va_end( ap );
+
    if ((len = strlen(buf)) > MAXPROCTITLE-1)
       err_fatal( __FUNCTION__, "buffer overflow (%d)\n", len );
+
    buf[ MIN(_dict_argvlen,MAXPROCTITLE) - 1 ] = '\0';
    strcpy( _dict_argvstart, buf );
    memset( _dict_argvstart+len, 0, _dict_argvlen-len );
@@ -98,7 +111,7 @@ const char *dict_format_time( double t )
    if (++current >= 10) current = 0;
 
    if (t < 600) {
-      sprintf( this, "%0.3f", t );
+      snprintf( this, sizeof (buf [0]), "%0.3f", t );
    } else {
       s = (long int)t;
       d = s / (3600*24);
@@ -109,11 +122,11 @@ const char *dict_format_time( double t )
       s -= m * 60;
 
       if (d)
-	 sprintf( this, "%ld+%02ld:%02ld:%02ld", d, h, m, s );
+	 snprintf( this, sizeof (buf [0]), "%ld+%02ld:%02ld:%02ld", d, h, m, s );
       else if (h)
-	 sprintf( this, "%02ld:%02ld:%02ld", h, m, s );
+	 snprintf( this, sizeof (buf [0]), "%02ld:%02ld:%02ld", h, m, s );
       else
-	 sprintf( this, "%02ld:%02ld", m, s );
+	 snprintf( this, sizeof (buf [0]), "%02ld:%02ld", m, s );
    }
 
    return this;
@@ -181,7 +194,7 @@ static const char * signal2name (int sig)
    case SIGALRM:
       return "SIGALRM";
    default:
-      sprintf (name, "Signal %d", sig);
+      snprintf (name, sizeof (name), "Signal %d", sig);
       return name;
    }
 }
@@ -541,12 +554,14 @@ static int init_database( const void *datum )
 
    if (db->index_suffix){
       PRINTF (DBG_INIT, (":I:     .indexsuffix <ok>\n"));
+      db->index_suffix->flag_8bit     = db->index->flag_8bit;
       db->index_suffix->flag_utf8     = db->index->flag_utf8;
       db->index_suffix->flag_allchars = db->index->flag_allchars;
    }
    if (db->index_word){
       PRINTF (DBG_INIT, (":I:     .indexword <ok>\n"));
       db->index_word->flag_utf8     = db->index->flag_utf8;
+      db->index_word->flag_8bit     = db->index->flag_8bit;
       db->index_word->flag_allchars = db->index->flag_allchars;
    }
 
@@ -651,17 +666,19 @@ static void dict_close_databases (dictConfig *c)
    dictDatabase *db;
    dictAccess   *acl;
 
-   while (lst_length (c -> dbl) > 0){
-      db = (dictDatabase *) lst_pop (c -> dbl);
+   if (c -> dbl){
+      while (lst_length (c -> dbl) > 0){
+	 db = (dictDatabase *) lst_pop (c -> dbl);
 
-      if (db -> virtual_db_list)
-	 lst_destroy (db -> virtual_db_list);
+	 if (db -> virtual_db_list)
+	    lst_destroy (db -> virtual_db_list);
 
-      close_plugin (db);
-      close_database (db);
-      xfree (db);
+	 close_plugin (db);
+	 close_database (db);
+	 xfree (db);
+      }
+      lst_destroy (c -> dbl);
    }
-   lst_destroy (c -> dbl);
 
    if (c -> acl){
       while (lst_length (c -> acl) > 0){
@@ -719,10 +736,10 @@ static void dict_dump_defs( lst_List list )
 
 static const char *id_string( const char *id )
 {
-   static char buffer[BUFFERSIZE];
+   static char buffer [BUFFERSIZE];
 
-   sprintf( buffer, "%s", DICT_VERSION );
-   
+   snprintf( buffer, BUFFERSIZE, "%s", DICT_VERSION );
+
    return buffer;
 }
 
@@ -730,24 +747,29 @@ const char *dict_get_banner( int shortFlag )
 {
    static char    *shortBuffer = NULL;
    static char    *longBuffer = NULL;
-   const char     *id = "$Id: dictd.c,v 1.62 2003/01/17 06:58:56 cheusov Exp $";
+   const char     *id = "$Id: dictd.c,v 1.66 2003/02/10 19:24:25 cheusov Exp $";
    struct utsname uts;
    
    if (shortFlag && shortBuffer) return shortBuffer;
    if (!shortFlag && longBuffer) return longBuffer;
    
    uname( &uts );
-   
+
    shortBuffer = xmalloc(256);
-   sprintf( shortBuffer, "%s %s", err_program_name(), id_string( id ) );
-   
+   snprintf(
+      shortBuffer, 256,
+      "%s %s", err_program_name(), id_string( id ) );
+
    longBuffer = xmalloc(256);
-   sprintf( longBuffer,
-	    "%s %s/rf on %s %s", err_program_name(), id_string( id ),
-	    uts.sysname,
-	    uts.release );
-   
-   if (shortFlag) return shortBuffer;
+   snprintf(
+      longBuffer, 256,
+      "%s %s/rf on %s %s", err_program_name(), id_string( id ),
+      uts.sysname,
+      uts.release );
+
+   if (shortFlag)
+      return shortBuffer;
+
    return longBuffer;
 }
 
@@ -818,7 +840,9 @@ static void help( void )
                                 the default is 'exact'",
 "   --test-db <database>         database name for --test and --ftest.\n\
                                 the default is '*'",
-"   --test-match                 show matched words but the definitions\n",
+"   --test-match                 show matched words but the definitions",
+"   --test-nooutput              produces no output",
+"   --test-idle                  does everything except search",
       0 };
    const char        **p = help_msg;
 
@@ -925,15 +949,17 @@ static char *strlwr_8bit (char *str)
    return str;
 }
 
-static void set_utf8_mode (const char *locale)
+static void set_utf8bit_mode (const char *loc)
 {
    char *locale_copy;
-   locale_copy = strdup (locale);
+   locale_copy = strdup (loc);
    strlwr_8bit (locale_copy);
 
    utf8_mode =
        strstr (locale_copy, "utf-8") ||
        strstr (locale_copy, "utf8");
+
+   bit8_mode = !utf8_mode && (locale_copy [0] != 'c' || locale_copy [1] != 0);
 
    free (locale_copy);
 }
@@ -967,6 +993,9 @@ static void dict_make_dbs_available (dictConfig *cfg)
 
 static const char *database_arg="*";
 
+static int idle_mode     = 0;
+static int nooutput_mode = 0;
+
 static void dict_test (
    const char *word,
    int strategy)
@@ -978,10 +1007,12 @@ static void dict_test (
 
    count = dict_search_databases (l, NULL, database_arg, word, strategy);
 
-   if (count != 0){
-      dict_dump_defs (l);
-   }else{
-      fprintf (stderr, "No definitions found for \"%s\"\n", word);
+   if (!nooutput_mode){
+      if (count != 0){
+	 dict_dump_defs (l);
+      }else{
+	 fprintf (stderr, "No definitions found for \"%s\"\n", word);
+      }
    }
 
    dict_destroy_list (l);
@@ -1074,6 +1105,8 @@ int main( int argc, char **argv, char **envp )
       { "default-strategy", 1, 0, 511 },
       { "test-match",       0, 0, 512 },
       { "without-strategy", 1, 0, 513 },
+      { "test-nooutput",    0, 0, 514 },
+      { "test-idle",        0, 0, 515 },
       { 0,                  0, 0, 0  }
    };
 
@@ -1148,6 +1181,12 @@ int main( int argc, char **argv, char **envp )
       case 513:
 	 disable_strategy (optarg);
 	 break;
+      case 514:
+	 nooutput_mode = 1;
+	 break;
+      case 515:
+	 idle_mode = 1;
+	 break;
       case 'h':
       default:  help(); exit(0);                          break;
       }
@@ -1175,7 +1214,8 @@ int main( int argc, char **argv, char **envp )
    if (flg_test(LOG_TIMESTAMP)) log_option( LOG_OPTION_FULL );
    else                         log_option( LOG_OPTION_NO_FULL );
 
-   set_utf8_mode (locale);
+   set_utf8bit_mode (locale);
+
    if (!setlocale(LC_ALL, locale)){
       fprintf (stderr, "invalid locale '%s'\n", locale);
       exit (2);
@@ -1198,16 +1238,24 @@ int main( int argc, char **argv, char **envp )
    sanity(configFile);
    log_close();
 
-   
+
+   if (match_mode)
+      strategy |= DICT_MATCH_MASK;
+
+
    if (testWord) {		/* stand-alone test mode */
       dict_config_print( NULL, DictConfig );
       dict_init_databases( DictConfig );
 
       dict_make_dbs_available (DictConfig);
 
-      dict_test (testWord, strategy);
+      if (!idle_mode){
+	 dict_test (testWord, strategy);
 
-      fprintf( stderr, "%d comparisons\n", _dict_comparisons );
+	 if (!nooutput_mode){
+	    fprintf( stderr, "%d comparisons\n", _dict_comparisons );
+	 }
+      }
 
       dict_close_databases (DictConfig);
 
@@ -1241,16 +1289,27 @@ int main( int argc, char **argv, char **envp )
 
          if (buf[0]){
 	    ++words;
-            dict_test (buf, strategy);
+
+	    if (!idle_mode){
+	       dict_test (buf, strategy);
+	    }
          }
 
-         if (words && !(words % 1000))
-            fprintf( stderr,
-                     "%d comparisons, %d words\n", _dict_comparisons, words );
+         if (words && !(words % 1000)){
+	    if (!nooutput_mode){
+	       fprintf(
+		  stderr,
+		  "%d comparisons, %d words\n", _dict_comparisons, words );
+	    }
+	 }
       }
 
-      fprintf( stderr,
-	       "%d comparisons, %d words\n", _dict_comparisons, words );
+      if (!nooutput_mode){
+	 fprintf(
+	    stderr,
+	    "%d comparisons, %d words\n", _dict_comparisons, words );
+      }
+
       fclose( str);
 
       dict_close_databases (DictConfig);

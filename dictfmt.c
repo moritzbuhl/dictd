@@ -17,7 +17,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: dictfmt.c,v 1.12 2003/01/03 19:43:36 cheusov Exp $
+ * $Id: dictfmt.c,v 1.16 2003/02/10 19:08:33 cheusov Exp $
  *
  * Sun Jul 5 18:48:33 1998: added patches for Gutenberg's '1995 CIA World
  * Factbook' from David Frey <david@eos.lugs.ch>.
@@ -41,6 +41,14 @@
 #include <getopt.h>
 #endif
 
+#ifndef HAVE_SNPRINTF
+extern int snprintf(char *str, size_t size, const char *format, ...);
+#endif
+
+#ifndef HAVE_VSNPRINTF
+extern int vsnprintf(char *str, size_t size, const char *format, va_list ap);
+#endif
+
 #define FMT_MAXPOS 65
 #define FMT_INDENT  0
 
@@ -57,7 +65,11 @@ static int  Debug;
 static FILE *str;
 
 static int utf8_mode     = 0;
+static int bit8_mode     = 0;
+
 static int allchars_mode = 0;
+
+static int quiet_mode    = 0;
 
 static const char *hw_separator = "";
 static int         without_hw     = 0;
@@ -72,16 +84,19 @@ static int  fmt_pending;
 static int  fmt_hwcount;
 static int  fmt_maxpos = FMT_MAXPOS;
 
+static const char *locale         = "C";
+
 static void fmt_openindex( const char *filename )
 {
    char buffer[1024];
 
-   if (!filename) return;
+   if (!filename)
+      return;
 
    if (utf8_mode || allchars_mode)
-      sprintf( buffer, "sort > %s\n", filename );
+      snprintf( buffer, sizeof (buffer), "sort > %s\n", filename );
    else
-      sprintf( buffer, "sort -df > %s\n", filename );
+      snprintf( buffer, sizeof (buffer), "sort -df > %s\n", filename );
 
    if (!(fmt_str = popen( buffer, "w" ))) {
       fprintf( stderr, "Cannot open %s for write\n", buffer );
@@ -248,6 +263,21 @@ static void write_hw_to_index (const char *word, int start, int end)
    }
 }
 
+static int contain_nonascii_symbol (const char *word)
+{
+   if (!word)
+      return 0;
+
+   while (*word){
+      if (!isascii ((unsigned char) *word))
+	 return 1;
+
+      ++word;
+   }
+
+   return 0;
+}
+
 static void fmt_newheadword( const char *word, int flag )
 {
    static char prev[1024] = "";
@@ -255,6 +285,13 @@ static void fmt_newheadword( const char *word, int flag )
    static int  end;
    char *      sep   = NULL;
    char *      p;
+
+   if (locale [0] == 'C' && locale [1] == 0){
+      if (contain_nonascii_symbol (word)){
+	 fprintf (stderr, "\n8-bit head word \"%s\"is encountered while \"C\" locale is used\n", word);
+	 exit (1);
+      }
+   }
 
    fmt_indent = 0;
    if (*prev) fmt_newline();
@@ -292,17 +329,25 @@ static void fmt_newheadword( const char *word, int flag )
       }
    }
 
-   if (fmt_hwcount && !(fmt_hwcount % 100)) {
-      fprintf( stderr, "%10d headwords\r", fmt_hwcount );
+   if (!quiet_mode){
+      if (fmt_hwcount && !(fmt_hwcount % 100)) {
+	 fprintf( stderr, "%10d headwords\r", fmt_hwcount );
+      }
    }
+
    ++fmt_hwcount;
 }
 
 static void fmt_closeindex( void )
 {
    fmt_newheadword(NULL,0);
-   if (fmt_str) pclose( fmt_str );
-   fprintf( stderr, "%12d headwords\n", fmt_hwcount );
+   if (fmt_str){
+      pclose( fmt_str );
+   }
+
+   if (!quiet_mode){
+      fprintf( stderr, "%12d headwords\n", fmt_hwcount );
+   }
 }
 
 static void banner( FILE *out_stream )
@@ -351,7 +396,10 @@ static void help( FILE *out_stream )
      "-L        display copyright and license information",
      "-V        display version information",
      "-D        debug",
-     "--help    display this help message", 
+"--quiet\n\
+--silent\n\
+-q        quiet operation",
+"--help    display this help message", 
 "--locale   <locale> specifies the locale used for sorting.\n\
            if no locale is specified, the \"C\" locale is used.",
 "--allchars all characters (not only alphanumeric and space)\n\
@@ -381,15 +429,17 @@ static char *strlwr_8bit (char *s)
    return s;
 }
 
-static void set_utf8_mode (const char *locale)
+static void set_utf8bit_mode (const char *loc)
 {
    char *locale_copy;
-   locale_copy = strdup (locale);
+   locale_copy = strdup (loc);
    strlwr_8bit (locale_copy);
 
    utf8_mode =
       NULL != strstr (locale_copy, "utf-8") ||
       NULL != strstr (locale_copy, "utf8");
+
+   bit8_mode = !utf8_mode && (locale_copy [0] != 'c' || locale_copy [1] != 0);
 
    free (locale_copy);
 }
@@ -409,7 +459,6 @@ int main( int argc, char **argv )
    char       *pt;
    char       *s, *d;
    unsigned char *buf;
-   const char *locale      = "C";
 
    struct option      longopts[]  = {
       { "help",       0, 0, 501 },
@@ -420,11 +469,14 @@ int main( int argc, char **argv )
       { "without-header",       0, 0, 506 },
       { "without-url",          0, 0, 507 },
       { "without-time",         0, 0, 508 },
+      { "quiet",                0, 0, 'q' },
+      { "silent",               0, 0, 'q' },
    };
 
-   while ((c = getopt_long( argc, argv, "VLjfephDu:s:c:",
+   while ((c = getopt_long( argc, argv, "qVLjfephDu:s:c:",
                                     longopts, NULL )) != EOF)
       switch (c) {
+      case 'q': quiet_mode = 1;            break;
       case 'L': license(); exit(1);        break;
       case 'V': banner( stdout ); exit(1); break;
       case 501: help( stdout ); exit(1);   break;         
@@ -461,7 +513,7 @@ int main( int argc, char **argv )
       exit(1);
    }
 
-   set_utf8_mode (locale);
+   set_utf8bit_mode (locale);
 
    if (utf8_mode)
       setenv("LC_ALL", "C", 1); /* this is for 'sort' subprocess */
@@ -469,12 +521,18 @@ int main( int argc, char **argv )
       setenv("LC_ALL", locale, 1); /* this is for 'sort' subprocess */
 
    if (!setlocale(LC_ALL, locale)){
-	   fprintf (stderr, "invalid locale '%s'\n", locale);
-	   exit (2);
+      fprintf (stderr, "invalid locale '%s'\n", locale);
+      exit (2);
    }
 
-   sprintf( indexname, "%s.index", argv[optind] );
-   sprintf( dataname,  "%s.dict", argv[optind] );
+   if (
+      -1 == snprintf (
+	 indexname, sizeof (indexname), "%s.index", argv[optind] )||
+      -1 == snprintf (
+	 dataname,  sizeof (dataname), "%s.dict", argv[optind] ))
+   {
+      err_fatal (__FUNCTION__, "Too long filename\n");
+   }
 
    fmt_openindex( indexname );
    if (Debug) {
@@ -488,6 +546,11 @@ int main( int argc, char **argv )
 
    if (utf8_mode){
       fmt_newheadword("00-database-utf8",1);
+      fmt_string( "     " );
+   }
+
+   if (bit8_mode){
+      fmt_newheadword("00-database-8bit",1);
       fmt_string( "     " );
    }
 
@@ -511,7 +574,7 @@ int main( int argc, char **argv )
       fmt_string("This file was converted from the original database on:" );
       fmt_newline();
       time(&t);
-      sprintf( buffer, "          %25.25s", ctime(&t) );
+      snprintf( buffer, sizeof (buffer), "          %25.25s", ctime(&t) );
       fmt_string( buffer );
       fmt_newline();
       fmt_newline();

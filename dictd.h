@@ -55,13 +55,17 @@
 #define DICT_DAEMON_LIMIT        100 /* maximum simultaneous daemons */
 #define DICT_PERSISTENT_PRESTART 3 /* not implemented */
 #define DICT_PERSISTENT_LIMIT    5 /* not implemented */
-#define DICT_SHORT_ENTRY_NAME    "00-database-short"
-#define DICT_LONG_ENTRY_NAME     "00-database-long"
-#define DICT_INFO_ENTRY_NAME     "00-database-info"
 
-#define DICT_FLAG_UTF8           "00-database-utf8"
-#define DICT_FLAG_ALLCHARS       "00-database-allchars"
-#define DICT_FLAG_VIRTUAL        "00-database-virtual"
+#define DICT_ENTRY_PREFIX        "00-database"
+#define DICT_ENTRY_PREFIX_LEN    sizeof(DICT_ENTRY_PREFIX)-1
+#define DICT_SHORT_ENTRY_NAME    DICT_ENTRY_PREFIX"-short"
+#define DICT_LONG_ENTRY_NAME     DICT_ENTRY_PREFIX"-long"
+#define DICT_INFO_ENTRY_NAME     DICT_ENTRY_PREFIX"-info"
+
+#define DICT_FLAG_UTF8           DICT_ENTRY_PREFIX"-utf8"
+#define DICT_FLAG_8BIT           DICT_ENTRY_PREFIX"-8bit"
+#define DICT_FLAG_ALLCHARS       DICT_ENTRY_PREFIX"-allchars"
+#define DICT_FLAG_VIRTUAL        DICT_ENTRY_PREFIX"-virtual"
 
 #define DICT_DEFAULT_STRATEGY    DICT_LEVENSHTEIN
 
@@ -180,7 +184,8 @@ typedef struct dictIndex {
    const char    *optStart[UCHAR_MAX+2]; /* Optimized starting points */
    unsigned long headwords;	 /* computed number of headwords */
 
-   int    flag_utf8;         /* not zero if it has 00-database-ut8 entry*/
+   int    flag_utf8;         /* not zero if it has 00-database-utf8 entry*/
+   int    flag_8bit;         /* not zero if it has 00-database-8bit entry*/
    int    flag_allchars;     /* not zero if it has 00-database-allchars entry*/
 
    dictPlugin    *plugin;
