@@ -1,22 +1,183 @@
+2002-05-05  Rik Faith  <faith@dict.org>
+
+  * Makefile.in, dictd.c:
+  Process --locale option
+  Bump version
+
+2002-05-03  Rik Faith  <faith@dict.org>
+
+  * dict.c:
+  Use user/key for default servers, not just command-line server
+
+  * dict.c:
+  Make sure pager is closed when reporting fatal error
+
+  * Makefile.in: Bump version
+
+2002-04-29  Rik Faith  <faith@dict.org>
+
+  * daemon.c, dictd.8, dictd.c, index.c:
+  Add --locale option
+  Make log output 8-bit clean
+
+2002-04-22  Rik Faith  <faith@dict.org>
+
+  * Makefile.in: Bump version for testing
+
+  * dictd.h, index.c:
+  Fix support for locale patch
+
+  * index.c:
+  Apply patches from Aleksey Cheusov to make dictd know about locale
+  If LC_CTYPE and LC_COLLATE are the same for dictfmt and dictd, then a non C collating order should work.
+
+  * daemon.c, dictd.h:
+  Make -l connect log something (under :K:)
+
+  * dictzip.c:
+  Fix Debian Bug#142672: dictunzip problem with single chunk files
+
+2002-03-31  Rik Faith  <faith@dict.org>
+
+  * Makefile.in:
+  Update permissions on files placed into distribution tarball.
+
+  * libmaa/log.c: Remove debugging statements
+
+  * libmaa/log.c: Fix log file path creation
+
+  * Makefile.in: Bump version for testing
+
+  * libmaa/log.c: Make path for log file
+
+  * regex/Makefile, regex/README.DICT:
+  Do not rebuild library each time make is called
+
+  * INSTALL, daemon.c, dictd.8:
+  Improve documentation
+  Fix authentication match reporting
+  Prevent core dump if user is NULL
+  Improve reporting of access denial
+
+  * Makefile.in: Use INSTALL* macros
+  Make directories if they do not exist
+
+  * libmaa/log.c:
+  Do not close stdout or stderr when other log files are closed
+
+  * dict.c: Allow -u option to work
+
+2002-03-30  Rik Faith  <faith@dict.org>
+
+  * Makefile.in, dict.c, dictd.c, dictzip.c, libmaa/Makefile.in, libmaa/arg.c, libmaa/argtest.c, libmaa/base26.c, libmaa/base64.c, libmaa/basetest.c, libmaa/bit.c, libmaa/bittest.c, libmaa/configure.in, libmaa/debug.c, libmaa/debugtest.c, libmaa/decl.h, libmaa/error.c, libmaa/flags.c, libmaa/hash.c, libmaa/hashtest.c, libmaa/list.c, libmaa/listtest.c, libmaa/log.c, libmaa/maa.c, libmaa/maa.h, libmaa/maaP.h, libmaa/memory.c, libmaa/memtest.c, libmaa/mkrnd.c, libmaa/parse-concrete.c, libmaa/parse.c, libmaa/pr.c, libmaa/prime.c, libmaa/primetest.c, libmaa/prtest.c, libmaa/rnd.c, libmaa/set.c, libmaa/settest.c, libmaa/sl.c, libmaa/sltest.c, libmaa/source.c, libmaa/stack.c, libmaa/strdup.c, libmaa/string.c, libmaa/stringtest.c, libmaa/text.c, libmaa/timer.c, libmaa/xmalloc.c:
+  Update email address
+  Update copyright notices
+  Bump version for testing
+
+  * dictd.c: Re-open logs after detach routines close all fds
+
+  * libmaa/maaP.h, config.h.in, configure.in, daemon.c, data.c, dict.c, dictd.c, index.c, net.c:
+  Changes for Solaris 2.7 with WorkShop Compilers 5.0
+
+  * Makefile.in, libmaa/version.c:
+  Bump version for testing
+
+  * Makefile.in, daemon.c, dictd.8, dictd.c, dictd.h, libmaa/acconfig.h, libmaa/config.h.in, libmaa/configure.in, libmaa/log.c, libmaa/maa.h, libmaa/sl.c:
+  Add --facility option
+  Based on patch from Bob Hilliard for the debian 1.5.5-8 version.
+
+  * regex/Makefile, regex/README.DICT:
+  Prevent all objects from being rebuilt every time.
+
+  * Makefile.in: Update ChangeLog creation
+
+  * regex/COPYRIGHT, regex/Makefile, regex/README, regex/README.DICT, regex/WHATSNEW, regex/engine.c, regex/regcomp.c, regex/regerror.c, regex/regex.3, regex/regex.7, regex/regex2.h, regex/regexec.c, regex/tests, regex/utils.h:
+  Upgrade to aleph3.8 version of regex
+
+  * dictd.8, dictd.c:
+  Apply general patches from Bob Hilliard
+  Fix typos in man page
+  Make man page formatting clearer
+  Add man page information about security and previously missing options
+  Update URLs in man page
+  Make help write to stdout
+  Add sanity checks and move logging so that people get information about:
+    unreadable configuration files
+    unreadable databases files
+    other errors that prevent startup (and were previously silent)
+
+  * zlib/README.DICT:
+  Add file reporting source and possible modifications.
+
+  * dictd.c: Print help to stdout instead of stderr
+
+2002-03-29  Rik Faith  <faith@dict.org>
+
+  * dict.1, dict.c:
+  Remove html support from dict client
+  (it was broken anyway)
+
+  * dictd.8, dictzip.c:
+  Patch from Bob Hilliard to make dictunzip and dictzcat work
+
+  * dict.c: Added newline to err_fatal
+
+  * daemon.c, dictd.c, dictd.h:
+  Improved authentication debugging
+  Added authentication failure logging
+  Fixed bug that closed fd multiple times (Debian bug #137500 from Russell Coker)
+
+  * zlib/ChangeLog, zlib/FAQ, zlib/INDEX, zlib/Make_vms.com, zlib/Makefile, zlib/Makefile.b32, zlib/Makefile.bor, zlib/Makefile.dj2, zlib/Makefile.in, zlib/Makefile.msc, zlib/Makefile.riscos, zlib/Makefile.sas, zlib/Makefile.tc, zlib/Makefile.wat, zlib/README, zlib/adler32.c, zlib/algorithm.doc, zlib/algorithm.txt, zlib/compress.c, zlib/configure, zlib/crc32.c, zlib/deflate.c, zlib/deflate.h, zlib/example.c, zlib/gzio.c, zlib/infblock.c, zlib/infblock.h, zlib/infcodes.c, zlib/infcodes.h, zlib/inffast.c, zlib/inffast.h, zlib/inffixed.h, zlib/inflate.c, zlib/inftrees.c, zlib/inftrees.h, zlib/infutil.c, zlib/infutil.h, zlib/maketree.c, zlib/minigzip.c, zlib/trees.c, zlib/trees.h, zlib/uncompr.c, zlib/zconf.h, zlib/zlib.3, zlib/zlib.def, zlib/zlib.h, zlib/zlib.html, zlib/zlib.rc, zlib/zutil.c, zlib/zutil.h:
+  Updgrade to zlib 1.1.4
+  This version does not have the double free bug:
+  http://www.gzip.org/zlib/advisory-2002-03-11.txt
+  Note, though, that dictd never decompressed Internet traffic.
+
+  * dictd.8: Add breaks to make syntax clearer.
+
+  * servscan.l: Allow strings to start with numbers
+
+  * daemon.c, dictd.8:
+  Add support for IP ranges and masks.
+
+  * clientparse.y:
+  Allow the server list to come before or after the pager in the client configuration file.
+
+  * dictd.8:
+  Clarify in the man page that allow only takes one argument.
+
+2001-10-14  Rik Faith  <faith@dict.org>
+
+  * dict.c:
+  Print "No matches..." message when -m have no matches
+
+  * libmaa/configure.in, Makefile.in:
+  Bump version
+
+  * configure.in, dict.c:
+  When parsing dict:// URIs, treat empty hostname as the default host.
+
+  * libmaa/configure.in, libmaa/log.c:
+  Add strftime processing to log file names
+
 2001-01-12  Rik Faith  <faith@dict.org>
 
   * Makefile.in: Bump version
 
-2001-01-01  hilliard  <hilliard@light>
+2001-01-01  Bob Hilliard  <hilliard@debian.org>
 
   * dict.c:
   Aaaargh!  Previous update broke pager in dict.  This is fixed now.
 
 2000-12-31  Rik Faith  <faith@dict.org>
 
-  * Makefile.in, index.c:
-  Fix const warning
+  * Makefile.in, index.c: Fix const warning
   Bump version number
 
   * libmaa/decl.h, libmaa/text.c, decl.h, index.c:
   Made minor changes for Solaris 5.7 compilation
 
-2000-12-27  hilliard  <hilliard@light>
+2000-12-27  Bob Hilliard  <hilliard@debian.org>
 
   * dict.1, dict.c, dictd.8:
        dict.c - added argument to help message for -s; made all help messages go
@@ -60,10 +221,9 @@
 
 2000-01-27  Rik Faith  <faith@dict.org>
 
-  * Makefile.in:
-  Man page directory fix from weed@DeepThought
+  * Makefile.in: Man page directory fix from weed@DeepThought
 
-1999-12-23  tek  <tek@light>
+1999-12-23  Julian Squires  <tek@wiw.org>
 
   * libmaa/maaP.h:
   Added OpenBSD to list of BSDs to allow smooth compilation.
@@ -161,8 +321,7 @@
   * dictd.conf:
   Another (more complete) example dictd.conf file
 
-  * README, configure.in:
-  Minor changes
+  * README, configure.in: Minor changes
   Always use local libmaa, because of recent bug fixes
 
   * libmaa/log.c, libmaa/maa.h:
@@ -171,8 +330,7 @@
   * libmaa/source.c:
   Fixed NULL pointer dereference in err_ routines
 
-  * Makefile.in, libmaa/maaP.h:
-  Port to BSDI
+  * Makefile.in, libmaa/maaP.h: Port to BSDI
 
 1998-02-20  Rik Faith  <faith@dict.org>
 
@@ -301,8 +459,7 @@
   * dictd.8, README, Makefile.in:
   Added README.  Fixed install
 
-  * TODO, Makefile.in:
-  Installation fixes
+  * TODO, Makefile.in: Installation fixes
 
   * doc/rfc.ms, servparse.y, servscan.l, net.h, net.c, example.dictrc, example3.conf, dictzip.1, dictd.h, dictd.c, dictd.8, dict.html, dict.h, dict.c, dict.1, configure.in, config.h.in, clientscan.l, clientparse.y, Makefile.in:
   Added config files to client
@@ -396,8 +553,7 @@
 
   * doc/Makefile.in: Makefile for doc directory
 
-  * doc/rfc.ms, doc/design.tex:
-  Careful edit
+  * doc/rfc.ms, doc/design.tex: Careful edit
   Fixed -ms style formatting things.  Numbering now automatic.
   Adjusted grammar and made references to it in appropriate places.
   Added requirements section.
