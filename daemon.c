@@ -17,7 +17,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: daemon.c,v 1.74 2004/03/06 15:27:54 cheusov Exp $
+ * $Id: daemon.c,v 1.76 2004/05/15 16:51:46 cheusov Exp $
  * 
  */
 
@@ -1142,7 +1142,6 @@ static void daemon_show_info( const char *cmdline, int argc, char **argv )
 			CODE_DATABASE_INFO, argv[2] );
 	 daemon_mime();
 	 daemon_text(db -> databaseInfo);
-	 daemon_text("\n");
 	 daemon_ok( CODE_OK, "ok", NULL );
 	 return;
       }
@@ -1485,7 +1484,7 @@ int _handleconn (int delay, int error) {
    dict_setproctitle( "dictd: %s connected", daemonHostname );
 
    if (error) {
-      daemon_printf( "%d temporarily unavailable\n",
+      daemon_printf( "%d server temporarily unavailable\n",
 		     CODE_TEMPORARILY_UNAVAILABLE );
       daemon_terminate( 0, "temporarily unavailable" );
    }

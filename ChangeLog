@@ -1,3 +1,143 @@
+2004-06-06  Aleksey Cheusov  <vle at gmx.net}
+
+  * NEWS: corrections
+
+  * libmaa/configure.in: *** empty log message ***
+
+  * libmaa/configure.in:
+  libmaa version ==> 0.99
+
+  * configure.in, Makefile.in:
+  version ==> 1.9.14
+
+  * NEWS:
+  updated to 1.9.14
+
+  * NEWS:
+  fixed a typo
+
+2004-05-30  Aleksey Cheusov  <vle at gmx.net}
+
+  * libmaa/timer.c:
+  a few checks for NULL
+
+  * dictd.c:
+  exit status of child processes is logged with '--log server' option.
+  code clean-ups
+
+  * dictd.c, net.c:
+  detaching from terminal again
+
+  * libmaa/arggram2c: comments changed
+
+2004-05-28  Aleksey Cheusov  <vle at gmx.net}
+
+  * mbrlen.c, mbrtowc.c, mbstowcs.c:
+  fixed: on systems having no mbrlen(3) function (FreeBSD4),
+      dictfmt assert(3)s
+      if run with 8-bit --locale option and headword contains
+      0xFF or 0xFE symbols (for exsmple, KOI8-R and CP1251 character sets).
+
+2004-05-25  Aleksey Cheusov  <vle at gmx.net}
+
+  * dictd.8: dosumentation update
+
+2004-05-24  Aleksey Cheusov  <vle at gmx.net}
+
+  * dictfmt.c:
+  "The original data was distributed..." message is wrapped to 72 (default)
+      columns even if '--columns 0' was specified.
+
+  * dictfmt.c:
+  Special 00-database-XXX headwords do not affect 00-database-alphabet,
+      i.e. only characters from "real" headwords
+      are added to alphabet.
+      This makes LEV search strategy a little faster,
+      especially search in dictionaries
+      containing non-Latin symbols like Cyrillic.
+
+  * dict.1, dict.c:
+  If a connection to DICT server faild, dict exits with exit status 41
+  documentation update
+
+2004-05-21  Aleksey Cheusov  <vle at gmx.net}
+
+  * dictd.8, dictd.c, net.c, net.h:
+  dictd: added --listen-to option for binding socket to the specified address
+  documentation update
+
+2004-05-16  Aleksey Cheusov  <vle at gmx.net}
+
+  * libmaa/configure.in, libmaa/log.c:
+  Where vsyslog function is determined by autoconf
+      but the platform-dependant #defines
+
+  * libmaa/log.c:
+  code clean-ups: duplicated code is separated into a function
+
+  * dictd.c, net.c:
+  'dictd' opens a log file (-L option) before releasing root priviledges.
+      As a result log file can be created under /var/log directory
+  log file and syslog is opened once.
+  The error messages of sanity checks are written to log file (or syslog)
+  "close everything" section has been removed from net.c:net_detach
+      This is necessary because we open log file
+      before detaching from a terminal
+
+  * dictfmt.c:
+  -t option implies '--columns 0' to preserve original formatting
+
+2004-05-15  Aleksey Cheusov  <vle at gmx.net}
+
+  * daemon.c:
+  fixed: SHOW INFO command sends incorrect data to the client if
+      the information about database is set using 'info' keyword.
+      Affected versions: 1.9.12-1.9.13
+
+2004-05-14  Aleksey Cheusov  <vle at gmx.net}
+
+  * libmaa/arg.c, libmaa/arggram2c, libmaa/arggram.txt, libmaa/argtest.c, libmaa/argtest.in, libmaa/argtest.out, libmaa/Makefile.in:
+  fixed: arg_argify parses string incorrectly, for example,
+      for the input 1''2''3''4 it produces single token 1'''.
+      As a result 'dictd' may parse TCP commands incorrectly.
+
+      arg_argify is fully reimplemented and now uses Mealy machine
+      similar to that used by lex and flex.
+
+  argtest.c is reimplemented
+  more tests for arg_argify function have been added
+
+  * dictdplugin_dbi.c:
+  fixed: warning message produced by compiler
+
+  * NEWS: fixed misspell
+
+2004-04-26  Aleksey Cheusov  <vle at gmx.net}
+
+  * codes.h:
+  added: missing response code
+
+  * dict.1, dict.c:
+  exit status again: fixes, improvements, documentation update
+
+2004-04-23  Aleksey Cheusov  <vle at gmx.net}
+
+  * dict.c:
+  In case of an error, non-zero exit status returned by 'dict'
+
+  * daemon.c:
+  more information status message printed by dictd
+
+2004-04-05  Aleksey Cheusov  <vle at gmx.net}
+
+  * dictd.8, dictd.c:
+  SIGUSR1  causes  dictd  to unload databases. Then dictd returns 420 status
+   (instead of 220). To load databases again,  send  SIGHUP  signal.  Because
+   database  files  are  mmap'ed(2)  ,  it is impossible to update them while
+   dictd is running.  So, if you need to update  database  files  and  reread
+   configuration  file,  first,  send  SIGUSR1  signal  to  dictd  to  unload
+   databases, update files, and then send SUGHUP signal to load them again.
+
 2004-03-24  Aleksey Cheusov  <vle at gmx.net}
 
   * example_plugin_dbi.conf: revert --> reverse
