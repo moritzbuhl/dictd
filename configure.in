@@ -18,7 +18,7 @@ dnl You should have received a copy of the GNU General Public License along
 dnl with this program; if not, write to the Free Software Foundation, Inc.,
 dnl 675 Mass Ave, Cambridge, MA 02139, USA.
 dnl
-dnl $Id: configure.in,v 1.23 2002/09/12 13:08:06 cheusov Exp $
+dnl $Id: configure.in,v 1.30 2002/12/17 13:49:01 cheusov Exp $
 dnl
 dnl Flag conventions:
 dnl     CFLAGS and LDFLAGS should be settable on the make commandline
@@ -31,16 +31,22 @@ dnl     XCFLAGS and XLDFLAGS are for X11
 dnl     YCFLAGS is for yacc
 dnl     LCFLAGS is for lex
 
-AC_PREREQ(2.1)
-AC_REVISION($Revision: 1.23 $)
-AC_INIT(dictd.c)
-AC_CONFIG_HEADER(config.h)
 
-ac_default_prefix=/usr
-etcdir=/etc
+define(VERSION, 1.9.1)
+
+
+AC_PREREQ(2.52)
+AC_REVISION($Revision: 1.30 $)
+
+AC_INIT(dict, VERSION, "dict-beta@dict.org")
+
+AC_CONFIG_SRCDIR([dictd.c])
+AC_CONFIG_HEADER(config.h)
 
 echo Configuring for dict
 echo .
+
+DICT_VERSION=VERSION
 
 AC_ARG_WITH(cc,
 [  --with-cc               with cc (instead of gcc)],
@@ -52,6 +58,8 @@ fi
 
 AC_CANONICAL_HOST
 AC_PROG_CC
+dnl AC_PROG_CXX
+
 AC_ISC_POSIX
 
 REALCC="$CC"
@@ -165,19 +173,30 @@ if test "x${withval}" = xyes; then
 fi
 ])
 
-AC_ARG_WITH(etcdir,
-[ --with-etcdir=PATH       directory containing server configuration file],
-etcdir=$withval)
+AC_ARG_ENABLE([plugin],[  --disable-plugin        without plugin support])
+if test "x${enableval}" != xno; then
+    CFLAGS="$CFLAGS -DUSE_PLUGIN"
+	AC_CHECK_LIB(ltdl,lt_dlopen,REALLIBS="$REALLIBS -lltdl")
+	USE_PLUGIN=1
+fi
 
 dnl Checks for programs.
 echo Checking for programs
 
+AC_PROG_AWK
 AC_PROG_INSTALL
 AC_PROG_LEX
 AC_PROG_YACC
 AC_PROG_RANLIB
+AC_PROG_MAKE_SET
 dnl AC_PROG_LIBTOOL
 dnl AC_LIBTOOL_DLOPEN
+
+AC_CHECK_PROG(AR,ar,ar)
+
+dnl AC_PROG_LIBTOOL
+dnl AC_LIBTOOL_DLOPEN
+
 AC_CHECK_PROGS(NROFF,gnroff nroff)
 AC_CHECK_PROGS(TROFF,groff troff)
 AC_CHECK_PROGS(COL,col cat)
@@ -198,6 +217,9 @@ if test "$local_libmaa" = 1; then
         REALLIBS="$REALLIBS -Llibmaa -lmaa"
         XTRACFLAGS="$XTRACFLAGS -Ilibmaa"
         subdirs="$subdirs libmaa"
+
+	AC_CONFIG_SUBDIRS(libmaa)
+
         allsubdirs="$allsubdirs libmaa"
         AC_MSG_RESULT(yes)
     else
@@ -216,6 +238,9 @@ if test "$local_zlib" = 1; then
         REALLIBS="$REALLIBS -Lzlib -lz"
         XTRACFLAGS="$XTRACFLAGS -Izlib"
         allsubdirs="$allsubdirs zlib"
+
+	AC_CONFIG_SUBDIRS(zlib)
+
         AC_MSG_RESULT(yes)
     else
         AC_MSG_RESULT(no)
@@ -225,7 +250,6 @@ fi
 
 AC_CHECK_LIB(socket,main,REALLIBS="$REALLIBS -lsocket")
 AC_CHECK_LIB(nsl,main,REALLIBS="$REALLIBS -lnsl")
-AC_CHECK_LIB(ltdl,lt_dlopen,REALLIBS="$REALLIBS -lltdl")
 
 if test "$local_dmalloc" = 0 -a "$needs_dmalloc" = 1; then
     AC_CHECK_LIB(dmalloc,main,
@@ -241,6 +265,9 @@ if test "$local_dmalloc" = 1; then
         XTRACFLAGS="$XTRACFLAGS -DDMALLOC_FUNC_CHECK -Idmalloc"
         XTRAHEADERS="$XTRAHEADERS dmalloc/dmalloc.h"
         allsubdirs="$allsubdirs dmalloc"
+
+	AC_CONFIG_SUBDIRS(dmalloc)
+
         subdirs="$subdirs dmalloc"
         AC_MSG_RESULT(yes)
     else
@@ -253,6 +280,14 @@ echo Checking for header files
 
 AC_HEADER_STDC
 AC_HEADER_TIME
+
+if test "x${USE_PLUGIN}" = "x1"; then
+   AC_CHECK_HEADERS(ltdl.h,
+		[AC_DEFINE(HAVE_LTDL_H, 1,
+			[Define if you have the <ltdl.h> header file.])],
+			[AC_MSG_ERROR([Install ltdl library and appropriate header files])])
+fi
+
 AC_CHECK_HEADERS(unistd.h strings.h limits.h)
 AC_CHECK_HEADERS(sys/resource.h sys/time.h sys/param.h sys/wait.h)
 
@@ -266,6 +301,7 @@ echo .
 echo Checking for library functions
 
 AC_FUNC_ALLOCA
+AC_FUNC_MMAP
 AC_CHECK_FUNCS(strdup strtol strtoul semget strerror inet_aton)
 AC_REPLACE_FUNCS(strdup strtol strtoul)
 
@@ -275,17 +311,20 @@ echo Making output files
 CC="$REALCC"
 LIBS="$REALLIBS"
 
-AC_CONFIG_SUBDIRS($subdirs)
-
+AC_SUBST(DICT_VERSION)
 AC_SUBST(WCFLAGS)
 AC_SUBST(SCFLAGS)
 AC_SUBST(WLDFLAGS)
 AC_SUBST(XTRACFLAGS)
 AC_SUBST(XTRALDFLAGS)
 AC_SUBST(XTRAHEADERS)
+AC_SUBST(USE_PLUGIN)
 AC_SUBST(allsubdirs)
-AC_SUBST(etcdir)
-AC_OUTPUT(Makefile doc/Makefile)
+
+AC_CONFIG_FILES([Makefile doc/Makefile])
+AC_CONFIG_FILES([dictdplugin-config], [chmod +x dictdplugin-config])
+
+AC_OUTPUT
 
 date > stamp-h.in
 date > stamp-h

@@ -17,7 +17,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: servparse.y,v 1.9 2002/08/05 11:54:03 cheusov Exp $
+ * $Id: servparse.y,v 1.12 2002/12/04 19:12:47 cheusov Exp $
  * 
  */
 
@@ -46,8 +46,9 @@ static dictDatabase *db;
 				/* Terminals */
 
 %token <token> '{' '}' T_ACCESS T_ALLOW T_DENY T_GROUP T_DATABASE T_DATA
-%token <token> T_INDEX T_INDEX_SUFFIX T_FILTER T_PREFILTER T_POSTFILTER T_NAME
-%token <token> T_USER T_AUTHONLY T_SITE
+%token <token> T_INDEX T_INDEX_SUFFIX T_INDEX_WORD
+%token <token> T_FILTER T_PREFILTER T_POSTFILTER T_NAME
+%token <token> T_USER T_AUTHONLY T_SITE T_DATABASE_EXIT
 
 %token <token>  T_STRING
 %type  <token>  Site
@@ -125,6 +126,7 @@ AccessSpecList : AccessSpec { $$ = lst_create(); lst_append($$, $1); }
                ;
 
 Site : T_SITE T_STRING { $$ = $2; }
+     ;
 
 UserList : T_USER T_STRING T_STRING
            { $$ = hsh_create(NULL,NULL);
@@ -171,6 +173,15 @@ Database : T_DATABASE T_STRING
 	      db->databaseName = $2.string;
 	   }
            '{' SpecList '}' { $$ = db; }
+           |
+	   T_DATABASE_EXIT
+	   {
+	      db = xmalloc(sizeof(struct dictDatabase));
+	      memset( db, 0, sizeof(struct dictDatabase));
+	      db -> databaseName  = strdup("--exit--");
+	      db -> databaseShort = strdup("Actually this is EXIT command but the dictionary");
+	      $$ = db;
+	   }
          ;
 
 SpecList : Spec
@@ -180,6 +191,7 @@ SpecList : Spec
 Spec : T_DATA T_STRING              { SET(dataFilename,$1,$2); }
      | T_INDEX T_STRING             { SET(indexFilename,$1,$2); }
      | T_INDEX_SUFFIX T_STRING      { SET(indexsuffixFilename,$1,$2); }
+     | T_INDEX_WORD T_STRING        { SET(indexwordFilename,$1,$2); }
      | T_FILTER T_STRING     { SET(filter,$1,$2); }
      | T_PREFILTER T_STRING  { SET(prefilter,$1,$2); }
      | T_POSTFILTER T_STRING { SET(postfilter,$1,$2); }

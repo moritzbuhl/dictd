@@ -26,12 +26,16 @@
 #include "maa.h"
 #include "zlib.h"
 #include "codes.h"
-#include "plugin.h"
+#include "dictdplugin.h"
 
 #include "net.h"
 #include <arpa/inet.h>
 #include <errno.h>
+
+#ifdef USE_PLUGIN
 #include <ltdl.h>
+#endif
+
 #include <netdb.h>
 #include <netinet/in.h>
 #include <signal.h>
@@ -57,6 +61,7 @@
 
 #define DICT_FLAG_UTF8           "00-database-utf8"
 #define DICT_FLAG_ALLCHARS       "00-database-allchars"
+#define DICT_FLAG_VIRTUAL        "00-database-virtual"
 
 #define DICT_DEFAULT_STRATEGY    DICT_LEVENSHTEIN
 
@@ -152,11 +157,15 @@ typedef struct dictData {
 } dictData;
 
 typedef struct dictPlugin {
+#ifdef USE_PLUGIN
    lt_dlhandle handle;
+#endif
+
    void *      data;
    /*   int         status;*/
 
    dictdb_open_type   dictdb_open;
+   dictdb_set_type    dictdb_set;
    dictdb_search_type dictdb_search;
    dictdb_free_type   dictdb_free;
    dictdb_error_type  dictdb_error;
@@ -186,6 +195,7 @@ typedef struct dictDatabase {
    const char *dataFilename;
    const char *indexFilename;
    const char *indexsuffixFilename;
+   const char *indexwordFilename;
    const char *filter;
    const char *prefilter;
    const char *postfilter;
@@ -195,6 +205,9 @@ typedef struct dictDatabase {
    dictData   *data;
    dictIndex  *index;
    dictIndex  *index_suffix;
+   dictIndex  *index_word;
+
+   lst_List   *virtual_db_list;
 } dictDatabase;
 
 #define DICT_DENY     0
@@ -218,13 +231,14 @@ typedef struct dictConfig {
 } dictConfig;
 
 typedef struct dictWord {
-   dictDatabase  *database;
+   const dictDatabase  *database;
 
-   const char    *word;
+   char    *word;
 
    unsigned long start;
    unsigned long end;
 
+/* Used for plugins */
    const char    *def;
    int            def_size;
 } dictWord;
@@ -243,7 +257,7 @@ extern int      dict_data_zip(
    const char *preFilter, const char *postFilter );
 
 extern char *dict_data_obtain (
-   dictDatabase *db, const dictWord *dw);
+   const dictDatabase *db, const dictWord *dw);
 extern char *dict_data_read_ (
    dictData *data,
    unsigned long start, unsigned long end,
@@ -254,12 +268,23 @@ extern int   dict_data_filter(
    char *buffer, int *len, int maxLength,
    const char *filter );
 
+extern int get_strategies_count (void);
+extern const dictStrategy *get_strategies (void);
+extern dictStrategy * lookup_strat( const char *strategy );
+extern int lookup_strategy( const char *strategy );
 
 extern const char *dict_index_search( const char *word, dictIndex *idx );
 extern int         dict_search (
    lst_List l,
    const char *word,
-   dictDatabase *database, int strategy );
+   const dictDatabase *database, int strategy,
+   int *extra_result,                  /* may be NULL */
+   const dictPluginData **extra_data,  /* may be NULL */
+   int *extra_data_size);              /* may be NULL */
+extern int dict_search_databases (
+   lst_List *l,
+   lst_Position db_pos,
+   const char *databaseName, const char *word, int strategy);
 
 extern dictIndex  *dict_index_open(
    const char *filename,
@@ -271,8 +296,11 @@ extern void       dict_destroy_list( lst_List list );
 
 extern int        dict_destroy_datum( const void *datum );
 
-extern int        dict_plugin_open (dictIndex *i, dictDatabase *db);
+#ifdef USE_PLUGIN
+extern int        dict_plugin_open (
+   dictIndex *i, const dictDatabase *db);
 extern void       dict_plugin_close (dictIndex *i);
+#endif
 
 /* dictd.c */
 
@@ -285,6 +313,17 @@ extern const char *dict_get_banner( int shortFlag );
 extern dictConfig *DictConfig;  /* GLOBAL VARIABLE */
 extern int        _dict_comparisons; /* GLOBAL VARIABLE */
 extern int        _dict_forks;	/* GLOBAL VARIABLE */
+
+/*
+  If the filename doesn't start with / or .,
+  it is prepended with DICT_DIR
+*/
+extern const char *postprocess_dict_filename (const char *fn);
+/*
+  If the filename doesn't start with / or .,
+  it is prepended with PLUGIN_DIR
+*/
+extern const char *postprocess_plugin_filename (const char *fn);
 
 /* daemon.c */
 

@@ -17,7 +17,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: dictfmt.c,v 1.6 2002/08/23 17:33:10 cheusov Exp $
+ * $Id: dictfmt.c,v 1.11 2002/11/18 19:15:07 cheusov Exp $
  *
  * Sun Jul 5 18:48:33 1998: added patches for Gutenberg's '1995 CIA World
  * Factbook' from David Frey <david@eos.lugs.ch>.
@@ -145,7 +145,13 @@ static void fmt_string( const char *s )
 
    while ((pt = strchr(pt, ' '))) {
       *pt++ = '\0';
-      len = strlen(p);
+
+      if (utf8_mode){
+	 len = strlen_utf8 (p);
+      }else{
+	 len = strlen (p);
+      }
+
       if (fmt_pending && fmt_pos + len > fmt_maxpos) {
 	 fmt_newline();
       }
@@ -247,7 +253,7 @@ static void write_hw_to_index (const char *word, int start, int end)
 	 tolower_alnumspace_8bit (word, new_word);
       }
 
-      while (len > 0 && isspace (word [len - 1])){
+      while (len > 0 && isspace ((unsigned char) word [len - 1])){
 	 new_word [--len] = 0;
       }
 
@@ -350,7 +356,8 @@ static void help( FILE *out_stream )
 {
    static const char *help_msg[] = {
      "usage: dictfmt [-jfephDLV] [-c5] -u url -s name basename",
-     "-c5       headwords are all uppercase",
+     "-c5       headwords are preceded by a line containing at least \n\
+                5 underscore (_) characters",
      "-e        file is in html format",
      "-f        headwords start in col 0, definitions start in col 8",
      "-j        headwords are set off by colons",
@@ -385,8 +392,8 @@ static void set_utf8_mode (const char *locale)
    strlwr_8bit (locale_copy);
 
    utf8_mode =
-       strstr (locale_copy, "utf-8") ||
-       strstr (locale_copy, "utf8");
+      NULL != strstr (locale_copy, "utf-8") ||
+      NULL != strstr (locale_copy, "utf8");
 
    free (locale_copy);
 }
@@ -405,7 +412,7 @@ int main( int argc, char **argv )
    time_t     t;
    char       *pt;
    char       *s, *d;
-   char       *buf;
+   unsigned char *buf;
    const char *locale      = "C";
 
    struct option      longopts[]  = {
@@ -460,7 +467,7 @@ int main( int argc, char **argv )
       setenv("LC_ALL", locale, 1); /* this is for 'sort' subprocess */
 
    if (!setlocale(LC_ALL, locale)){
-	   fprintf (stderr, "ivalid locale '%s'\n", locale);
+	   fprintf (stderr, "invalid locale '%s'\n", locale);
 	   exit (2);
    }
 
@@ -535,7 +542,7 @@ int main( int argc, char **argv )
 	    if ((pt = strchr( buffer2, ','))) {
 	       *pt = '\0';
 	       fmt_newheadword(buffer2, 0);
-	       if (without_hw || hw_separator [0])
+	       if (without_hw)
 		  buf = NULL;
 	    }
 	 }
@@ -671,7 +678,7 @@ int main( int argc, char **argv )
 
 	    if (*buf != '\0') {
 	       fmt_newheadword(buf,0);
-	       if (without_hw || hw_separator [0])
+	       if (without_hw)
 		  buf = NULL;
 	    }
  	 }
@@ -686,8 +693,6 @@ int main( int argc, char **argv )
       }
  skip:
    }
-
-   fmt_newheadword(NULL,0);
 
    fmt_closeindex();
    fclose(str);

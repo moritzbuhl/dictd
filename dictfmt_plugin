@@ -7,14 +7,17 @@ necessary for integrating plugin into DICTD.
 It creates two special entries:
 00-database-plugin
   Its "definition" is a filename for plugin (possibly .so)
-  You should specify the filename as a parameter (see below)
+  You should specify the filename as a parameter (see below).
+  If the filename does not begin with '.' or '/', it is prepended with
+  $libexecdir/. It is a compile time option. You can change this behaviour
+  by editing Makefile or running ./configure --libexecdir=...
 00-database-plugin-data
   Its "definition" is a data passed to plugin during
-  initialisation.
-  They are passed from stdin.
+  initialization.
 Take a note that -c5 input format is used. You cannot specify
 another one.
-usage: dictfmt_plugin [OPTIONS] <path_to_plugin> [DICTFMT_OPTIONS]
+usage:
+dictfmt_plugin [OPTIONS] <path_to_plugin> [DICTFMT_OPTIONS] [datafiles...]
 OPTIONS:
     --help displays this help
 DICTFMT_OPTIONS:
@@ -52,4 +55,4 @@ _____\n\
 "
 
 	cat
-} | dictfmt -c5 "$@"
+} | dictfmt -c5 "$@" 2>/dev/null 1>&2

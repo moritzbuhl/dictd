@@ -17,7 +17,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: dictd.c,v 1.49 2002/09/12 13:08:06 cheusov Exp $
+ * $Id: dictd.c,v 1.60 2002/12/04 19:12:47 cheusov Exp $
  * 
  */
 
@@ -41,6 +41,8 @@
 
 extern int        yy_flex_debug;
 
+extern int        default_strategy;
+
 extern int        utf8_mode;
 extern int        mmap_mode;
 
@@ -52,8 +54,8 @@ static char       *_dict_argvstart;
 static int        _dict_argvlen;
 
        int        _dict_forks;
-       dictConfig *DictConfig;
 
+static const char *configFile  = DICT_CONFIG_PATH DICTD_CONFIG_NAME;
 
 void dict_initsetproctitle( int argc, char **argv, char **envp )
 {
@@ -157,21 +159,51 @@ static int start_daemon( void )
    return pid;
 }
 
+static const char * signal2name (int sig)
+{
+   static char name [50];
+
+   switch (sig) {
+   case SIGHUP:
+      return "SIGHUP";
+   case SIGINT:
+      return "SIGINT";
+   case SIGQUIT:
+      return "SIGQUIT";
+   case SIGILL:
+      return "SIGILL";
+   case SIGTRAP:
+      return "SIGTRAP";
+   case SIGTERM:
+      return "SIGTERM";
+   case SIGPIPE:
+      return "SIGPIPE";
+   case SIGALRM:
+      return "SIGALRM";
+   default:
+      sprintf (name, "Signal %d", sig);
+      return name;
+   }
+}
+
+static void log_sig_info (int sig)
+{
+   log_info (
+      ":I: %s: c/f = %d/%d; %sr %su %ss\n",
+      signal2name (sig),
+      _dict_comparisons,
+      _dict_forks,
+      dict_format_time (tim_get_real ("dictd")),
+      dict_format_time (tim_get_user ("dictd")),
+      dict_format_time (tim_get_system ("dictd")));
+}
+
 static void handler( int sig )
 {
    const char *name = NULL;
    time_t     t;
-   
-   switch (sig) {
-   case SIGHUP:  name = "SIGHUP";  break;
-   case SIGINT:  name = "SIGINT";  break;
-   case SIGQUIT: name = "SIGQUIT"; break;
-   case SIGILL:  name = "SIGILL";  break;
-   case SIGTRAP: name = "SIGTRAP"; break;
-   case SIGTERM: name = "SIGTERM"; break;
-   case SIGPIPE: name = "SIGPIPE"; break;
-   case SIGALRM: name = "SIGALRM"; break;
-   }
+
+   name = signal2name (sig);
 
    if (_dict_daemon) {
       daemon_terminate( sig, name );
@@ -189,26 +221,78 @@ static void handler( int sig )
 	 alarm(_dict_markTime);
 	 return;
       }
-      if (name) {
-	 log_info( ":I: %s: c/f = %d/%d; %sr %su %ss\n",
-		   name,
-		   _dict_comparisons,
-		   _dict_forks,
-		   dict_format_time( tim_get_real( "dictd" ) ),
-		   dict_format_time( tim_get_user( "dictd" ) ),
-		   dict_format_time( tim_get_system( "dictd" ) ) );
-      } else {
-	 log_info( ":I: Signal %d: c/f = %d/%d; %sr %su %ss\n",
-		   sig,
-		   _dict_comparisons,
-		   _dict_forks,
-		   dict_format_time( tim_get_real( "dictd" ) ),
-		   dict_format_time( tim_get_user( "dictd" ) ),
-		   dict_format_time( tim_get_system( "dictd" ) ) );
-      }
+
+      log_sig_info (sig);
    }
    if (!dbg_test(DBG_NOFORK) || sig != SIGALRM)
       exit(sig+128);
+}
+
+static void dict_close_databases (dictConfig *c);
+static void sanity (const char *confFile);
+static void dict_init_databases (dictConfig *c);
+static void dict_config_print (FILE *stream, dictConfig *c);
+
+static const char *postprocess_filename (const char *fn, const char *prefix)
+{
+   char *new_fn;
+
+   if (!fn)
+      return NULL;
+
+   if (fn [0] != '/' && fn [0] != '.'){
+      new_fn = xmalloc (2 + strlen (prefix) + strlen (fn));
+      strcpy (new_fn, prefix);
+      strcat (new_fn, fn);
+
+      return new_fn;
+   }else{
+      return xstrdup (fn);
+   }
+}
+
+const char *postprocess_plugin_filename (const char *fn)
+{
+   return postprocess_filename (fn, DICT_PLUGIN_PATH);
+}
+
+const char *postprocess_dict_filename (const char *fn)
+{
+   return postprocess_filename (fn, DICT_DICTIONARY_PATH);
+}
+
+static void postprocess_filenames (dictConfig *dc)
+{
+   lst_Position p;
+   dictDatabase *db;
+
+   LST_ITERATE(dc -> dbl, p, db) {
+      db -> dataFilename = postprocess_dict_filename (db -> dataFilename);
+      db -> indexFilename = postprocess_dict_filename (db -> indexFilename);
+      db -> indexsuffixFilename = postprocess_dict_filename (db -> indexsuffixFilename);
+      db -> indexwordFilename = postprocess_dict_filename (db -> indexwordFilename);
+   }
+
+   dc -> site = postprocess_dict_filename (dc -> site);
+}
+
+static void handler_sighup (int sig)
+{
+   log_sig_info (sig);
+
+   dict_close_databases (DictConfig);
+
+   if (!access(configFile,R_OK)){
+      prs_file_nocpp (configFile);
+      postprocess_filenames (DictConfig);
+   }
+
+   sanity (configFile);
+
+   if (dbg_test (DBG_VERBOSE))
+      dict_config_print( NULL, DictConfig );
+
+   dict_init_databases (DictConfig);
 }
 
 static void setsig( int sig, void (*f)(int), int sa_flags )
@@ -288,6 +372,8 @@ static int config_print( const void *datum, void *arg )
       fprintf( s, "   index      %s\n", db->indexFilename );
    if (db->indexsuffixFilename)
       fprintf( s, "   index_suffix      %s\n", db->indexsuffixFilename );
+   if (db->indexwordFilename)
+      fprintf( s, "   index_word      %s\n", db->indexwordFilename );
    if (db->filter)
       fprintf( s, "   filter     %s\n", db->filter ); /* Not implemented. */
    if (db->prefilter)
@@ -315,8 +401,12 @@ static const char *get_entry_info( dictDatabase *db, const char *entryName )
    dictWord *dw;
    lst_List list = lst_create();
    char     *pt, *buf;
-   
-   if (!dict_search ( list, entryName, db, DICT_EXACT )) {
+
+   if (
+      0 >= dict_search (
+	 list, entryName, db, DICT_EXACT,
+	 NULL, NULL, NULL ))
+   {
       lst_destroy( list );
       return NULL;
    }
@@ -344,20 +434,120 @@ static const char *get_entry_info( dictDatabase *db, const char *entryName )
    return pt;
 }
 
+static int init_virtual_db_list (const void *datum)
+{
+   lst_List list;
+   dictDatabase *db  = (dictDatabase *)datum;
+   dictDatabase *db2 = NULL;
+   dictWord *dw;
+   char *buf;
+   int ret;
+   char *p;
+   int len, i;
+   lst_Position db_pos;
+
+   if (!db -> index)
+      return 0;
+
+   list = lst_create();
+   ret = dict_search (
+      list, DICT_FLAG_VIRTUAL, db, DICT_EXACT,
+      NULL, NULL, NULL);
+
+   switch (ret){
+   case 1: case 2:
+      db -> virtual_db_list = lst_create ();
+
+      dw  = (dictWord *) lst_pop (list);
+      buf = dict_data_obtain (db, dw);
+      dict_destroy_datum (dw);
+
+      p   = buf;
+      len = strlen (buf);
+
+      for (i = 0; i <= len; ++i){
+	 if (buf [i] == '\n' || buf [i] == '\0'){
+	    buf [i] = '\0';
+
+	    if (*p){
+	       db_pos = lst_init_position (DictConfig->dbl);
+
+	       while (db_pos){
+		  db2 = lst_get_position (db_pos);
+
+		  if (!strcmp (db2 -> databaseName, p)){
+		     lst_append (db -> virtual_db_list, db2);
+		     break;
+		  }
+
+		  db_pos = lst_next_position (db_pos);
+	       }
+
+	       if (!db_pos){
+		  log_info( ":E: Unknown database '%s'\n", p );
+		  PRINTF(DBG_INIT, (":E: Unknown database '%s'\n", p));
+		  exit (2);
+	       }
+	    }
+
+	    p = buf + i + 1;
+	 }
+      }
+
+      xfree (buf);
+      break;
+   case 0:
+      break;
+   default:
+      err_fatal (
+	 __FUNCTION__,
+	 "index file contains more than one %s entry",
+	 DICT_FLAG_VIRTUAL);
+   }
+
+   dict_destroy_list (list);
+
+   return 0;
+}
+
+static int init_plugin( const void *datum )
+{
+#ifdef USE_PLUGIN
+   dictDatabase *db = (dictDatabase *)datum;
+   dict_plugin_open (db->index, db);
+#endif
+
+   return 0;
+}
+
 static int init_database( const void *datum )
 {
    dictDatabase *db = (dictDatabase *)datum;
 
    PRINTF (DBG_INIT, (":I: Initializing '%s'\n", db->databaseName));
    PRINTF (DBG_INIT, (":I:   Opening indices\n"));
+
    db->index        = dict_index_open( db->indexFilename, 1, 0, 0 );
-   db->index_suffix = dict_index_open(
-       db->indexsuffixFilename,
-       0, db->index->flag_utf8, db->index->flag_allchars);
+   PRINTF (DBG_INIT, (":I:     .index <ok>\n"));
+
+   if (db->index){
+      db->index_suffix = dict_index_open(
+	 db->indexsuffixFilename,
+	 0, db->index->flag_utf8, db->index->flag_allchars);
+      db->index_word = dict_index_open(
+	 db->indexwordFilename,
+	 0, db->index->flag_utf8, db->index->flag_allchars);
+   }
 
    if (db->index_suffix){
+      PRINTF (DBG_INIT, (":I:     .indexsuffix <ok>\n"));
       db->index_suffix->flag_utf8     = db->index->flag_utf8;
       db->index_suffix->flag_allchars = db->index->flag_allchars;
+   }
+   if (db->index_word){
+      PRINTF (DBG_INIT, (":I:     .indexword <ok>\n"));
+      db->index_word->flag_utf8     = db->index->flag_utf8;
+      db->index_word->flag_allchars = db->index->flag_allchars;
    }
 
    PRINTF (DBG_INIT, (":I:   Opening data\n"));
@@ -370,10 +560,20 @@ static int init_database( const void *datum )
    if (!db->databaseShort)
       db->databaseShort = xstrdup (db->databaseName);
 
-   dict_plugin_open (db->index, db);
-
    PRINTF(DBG_INIT,
 	  (":I: %s \"%s\" initialized\n",db->databaseName,db->databaseShort));
+
+   db -> virtual_db_list = NULL;
+
+   return 0;
+}
+
+static int close_plugin (const void *datum)
+{
+#ifdef USE_PLUGIN
+   dictDatabase  *db = (dictDatabase *)datum;
+   dict_plugin_close (db -> index);
+#endif
 
    return 0;
 }
@@ -382,14 +582,23 @@ static int close_database (const void *datum)
 {
    dictDatabase  *db = (dictDatabase *)datum;
 
-   dict_plugin_close (db -> index);
-
    dict_index_close (db->index);
    dict_index_close (db->index_suffix);
+   dict_index_close (db->index_word);
 
    dict_data_close (db->data);
 
-   xfree ((void *) db -> databaseShort);
+   if (db -> databaseShort)
+      xfree ((void *) db -> databaseShort);
+
+   if (db -> indexFilename)
+      xfree ((void *) db -> indexFilename);
+   if (db -> dataFilename)
+      xfree ((void *) db -> dataFilename);
+   if (db -> indexwordFilename)
+      xfree ((void *) db -> indexwordFilename);
+   if (db -> indexsuffixFilename)
+      xfree ((void *) db -> indexsuffixFilename);
 
    return 0;
 }
@@ -400,35 +609,41 @@ static int log_database_info( const void *datum )
    const char    *pt;
    unsigned long headwords = 0;
 
-   for (pt = db->index->start; pt < db->index->end; pt++)
-      if (*pt == '\n') ++headwords;
-   db->index->headwords = headwords;
-   
-   log_info( ":I: %-12.12s %12lu %12lu %12lu %12lu\n",
-	     db->databaseName, headwords,
-	     db->index->size, db->data->size, db->data->length );
+   if (db->index){
+      for (pt = db->index->start; pt < db->index->end; pt++)
+	 if (*pt == '\n') ++headwords;
+      db->index->headwords = headwords;
+
+      log_info( ":I: %-12.12s %12lu %12lu %12lu %12lu\n",
+		db->databaseName, headwords,
+		db->index->size, db->data->size, db->data->length );
+   }
 
    return 0;
 }
 
 static void dict_ltdl_init ()
 {
+#ifdef USE_PLUGIN
    if (lt_dlinit ())
       err_fatal( __FUNCTION__, "Can not initialize 'ltdl' library\n" );
+#endif
 }
 
 static void dict_ltdl_close ()
 {
+#ifdef USE_PLUGIN
    if (lt_dlexit ())
       err_fatal( __FUNCTION__, "Can not deinitialize 'ltdl' library\n" );
+#endif
 }
 
 static void dict_init_databases( dictConfig *c )
 {
-   dict_ltdl_init ();
-
    lst_iterate( c->dbl, init_database );
    lst_iterate( c->dbl, log_database_info );
+   lst_iterate( c->dbl, init_virtual_db_list );
+   lst_iterate( c->dbl, init_plugin );
 }
 
 static void dict_close_databases (dictConfig *c)
@@ -438,6 +653,11 @@ static void dict_close_databases (dictConfig *c)
 
    while (lst_length (c -> dbl) > 0){
       db = (dictDatabase *) lst_pop (c -> dbl);
+
+      if (db -> virtual_db_list)
+	 lst_destroy (db -> virtual_db_list);
+
+      close_plugin (db);
       close_database (db);
       xfree (db);
    }
@@ -449,30 +669,50 @@ static void dict_close_databases (dictConfig *c)
    }
    lst_destroy (c -> acl);
 
-   xfree (c);
+   if (c -> site)
+      xfree ((void *) c -> site);
 
-   dict_ltdl_close ();
+   xfree (c);
 }
 
-static int dump_def( const void *datum, void *arg )
+static int match_mode = 0;
+
+static int dump_def( const void *datum )
 {
    char         *buf;
-   dictWord     *dw = (dictWord *)datum;
-   dictDatabase *db = (dictDatabase *)arg;
+   const dictWord     *dw = (dictWord *)datum;
+   const dictDatabase *db = dw -> database;
 
-   buf = dict_data_obtain( db, dw );
+   if (match_mode){
+      printf (
+	 "%s:\t\"%s\"\n", db -> databaseName, dw -> word );
+   }else{
+      buf = dict_data_obtain( db, dw );
 
-   printf( "%s\n", buf );
-   xfree( buf );
+      printf (
+	 "From %s [%s]:\n\n%s\n", db -> databaseShort, db -> databaseName, buf );
+
+      xfree( buf );
+   }
+
    return 0;
 }
 
-static void dict_dump_defs( lst_List list, dictDatabase *db )
+static int call_dictdb_free (const void *datum)
 {
-   lst_iterate_arg( list, dump_def, db );
+   const dictWord     *dw = (dictWord *)datum;
+   const dictDatabase *db = dw -> database;
 
    if (db -> index -> plugin)
       db -> index -> plugin -> dictdb_free (db -> index -> plugin -> data);
+
+   return 0;
+}
+
+static void dict_dump_defs( lst_List list )
+{
+   lst_iterate (list, dump_def);
+   lst_iterate (list, call_dictdb_free);
 }
 
 static const char *id_string( const char *id )
@@ -488,7 +728,7 @@ const char *dict_get_banner( int shortFlag )
 {
    static char    *shortBuffer = NULL;
    static char    *longBuffer = NULL;
-   const char     *id = "$Id: dictd.c,v 1.49 2002/09/12 13:08:06 cheusov Exp $";
+   const char     *id = "$Id: dictd.c,v 1.60 2002/12/04 19:12:47 cheusov Exp $";
    struct utsname uts;
    
    if (shortFlag && shortBuffer) return shortBuffer;
@@ -557,20 +797,32 @@ static void help( void )
       "-m --mark <minutes>   how often should a timestamp be logged",
       "   --facility <fac>   set syslog logging facility",
       "-d --debug <option>   select debug option",
-      "-t --test <word>      self test -- lookup word",
-      "   --ftest <file>     self test -- lookup all words in file",
+      "-f --force            force startup even if daemon running",
+      "   --locale <locale>  specifies the locale used for searching.\n\
+                      if no locale is specified, the \"C\" locale is used.",
+"   --default-strategy   set the default search strategy for 'match' queries.\n\
+                      the default is 'lev'.",
+"   --without-strategy <strategies> disable strategies.\n\
+                                   <strategies> is a comma-separated list.",
+#ifdef HAVE_MMAP
+"   --no-mmap          do not use mmap() function and load files\n\
+                      into memory instead.",
+#endif
+"\n------------------ options for debugging ---------------------------",
+"-t --test <word>                lookup word",
+"   --test-file <file>",
+"   --ftest <file>               lookup all words in file",
 "   --test-strategy <strategy>   search strategy for --test and --ftest.\n\
                                 the default is 'exact'",
-"-f --force            force startup even if daemon running",
-"   --locale <locale>  specifies the locale used for searching.\n\
-                      if no locale is specified, the \"C\" locale is used.\n",
-"   --no-mmap          do not use mmap() function and read entire files\n\
-                      into memory instead.\n",
+"   --test-db <database>         database name for --test and --ftest.\n\
+                                the default is '*'",
+"   --test-match                 show matched words but the definitions\n",
       0 };
    const char        **p = help_msg;
 
    banner();
-   while (*p) printf( "%s\n", *p++ );
+   while (*p)
+      printf( "%s\n", *p++ );
 }
 
 static void set_minimal( void )
@@ -595,6 +847,7 @@ static void release_root_privileges( void )
 {
    if (geteuid() == 0) {
       struct passwd *pwd;
+
       if ((pwd = getpwnam("dictd"))) {
          setgid(pwd->pw_gid);
          initgroups("dictd",pwd->pw_gid);
@@ -614,31 +867,31 @@ static void release_root_privileges( void )
 /* Perform sanity checks that are often problems for people trying to
  * get dictd running.  Do this early, before we detach from the
  * console. */
-static void sanity(const char *configFile)
+static void sanity(const char *confFile)
 {
    int           fail = 0;
    struct passwd *pw = NULL;
    struct group  *gr = NULL;
 
-   if (access(configFile,R_OK)) {
-      log_info(":E: %s is not readable (config file)\n", configFile);
+   if (access(confFile,R_OK)) {
+      log_info(":E: %s is not readable (config file)\n", confFile);
       ++fail;
    }
-   if (!DictConfig->dbl) {
+   if (DictConfig && !DictConfig->dbl) {
       log_info(":E: no databases have been defined\n");
-      log_info(":E: check %s or use -c\n", configFile);
+      log_info(":E: check %s or use -c\n", confFile);
       ++fail;
    }
-   if (DictConfig->dbl) {
+   if (DictConfig && DictConfig->dbl) {
       lst_Position p;
       dictDatabase *e;
       LST_ITERATE(DictConfig->dbl, p, e) {
-           if (access(e->indexFilename, R_OK)) {
+           if (e->indexFilename && access(e->indexFilename, R_OK)) {
               log_info(":E: %s is not readable (index file)\n",
                        e->indexFilename);
               ++fail;
            }
-           if (access(e->dataFilename, R_OK)) {
+           if (e->dataFilename && access(e->dataFilename, R_OK)) {
               log_info(":E: %s is not readable (data file)\n",
                        e->dataFilename);
               ++fail;
@@ -676,9 +929,10 @@ static void set_utf8_mode (const char *locale)
 static void init (const char *fn)
 {
    maa_init (fn);
+   dict_ltdl_init ();
 }
 
-static void deinit ()
+static void destroy ()
 {
    /*
      tim_stop ("dictd");
@@ -686,6 +940,70 @@ static void deinit ()
    */
    src_destroy ();
    str_destroy ();
+   dict_ltdl_close ();
+}
+
+static void dict_make_dbs_available (dictConfig *cfg)
+{
+   lst_Position  p;
+   dictDatabase *db;
+
+   LST_ITERATE (cfg -> dbl, p, db) {
+      db -> available = 1;
+   }
+}
+
+static const char *database_arg="*";
+
+static void dict_test (
+   const char *word,
+   int strategy)
+{
+   lst_List l;
+   int count = 0;
+
+   l = lst_create ();
+
+   count = dict_search_databases (l, NULL, database_arg, word, strategy);
+
+   if (count > 0){
+      dict_dump_defs (l);
+   }else{
+      fprintf (stderr, "No definitions found for \"%s\"\n", word);
+   }
+
+   dict_destroy_list (l);
+}
+
+static const char *       without_strategy_arg = NULL;
+static dictStrategy *     without_strategy = (dictStrategy *) 1;
+
+static void disable_strategy (const char *strategies)
+{
+   char buffer [400];
+   int  i;
+   int  len = strlen (strategies);
+
+   if (len >= sizeof (buffer))
+      len = sizeof (buffer) - 1;
+
+   strncpy (buffer, strategies, len);
+   buffer [len] = '\0';
+
+   for (i = 0; i < len; ++i){
+      if (',' == buffer [i])
+	 buffer [i] = '\0';
+   }
+   for (i = 0; i < len; ){
+      without_strategy_arg = buffer + i;
+      i += strlen (without_strategy_arg) + 1;
+      without_strategy = lookup_strat (without_strategy_arg);
+      if (without_strategy){
+	 without_strategy -> number = -1;
+      }else{
+	 break;
+      }
+   }
 }
 
 int main( int argc, char **argv, char **envp )
@@ -698,7 +1016,6 @@ int main( int argc, char **argv, char **envp )
    int                word_len;
    int                alen         = sizeof(csin);
    const char         *service     = DICT_DEFAULT_SERVICE;
-   const char         *configFile  = DICT_CONFIG_PATH DICTD_CONFIG_NAME;
    int                detach       = 1;
    const char         *testWord    = NULL;
    const char         *testFile    = NULL;
@@ -711,8 +1028,10 @@ int main( int argc, char **argv, char **envp )
    const char         *locale      = "C";
    int                i;
 
-   const char         *strategy_arg= "exact";
-   int                 strategy;
+   const char *       strategy_arg = "exact";
+   int                strategy = lookup_strategy (strategy_arg);
+
+   const char *       default_strategy_arg = "???";
 
    struct option      longopts[]   = {
       { "verbose",  0, 0, 'v' },
@@ -724,6 +1043,7 @@ int main( int argc, char **argv, char **envp )
       { "license",  0, 0, 500 },
       { "test",     1, 0, 't' },
       { "ftest",    1, 0, 501 },
+      { "test-file",1, 0, 501 },
       { "log",      1, 0, 'l' },
       { "logfile",  1, 0, 'L' },
       { "syslog",   0, 0, 's' },
@@ -735,7 +1055,13 @@ int main( int argc, char **argv, char **envp )
       { "force",    1, 0, 'f' },
       { "locale",           1, 0, 506 },
       { "test-strategy",    1, 0, 507 },
+#ifdef HAVE_MMAP
       { "no-mmap",          0, 0, 508 },
+#endif
+      { "test-db",          1, 0, 509 },
+      { "default-strategy", 1, 0, 511 },
+      { "test-match",       0, 0, 512 },
+      { "without-strategy", 1, 0, 513 },
       { 0,                  0, 0, 0  }
    };
 
@@ -794,15 +1120,32 @@ int main( int argc, char **argv, char **envp )
       case 504: _dict_daemon_limit = atoi(optarg);        break;
       case 505: ++useSyslog; log_set_facility(optarg);    break;
       case 506: locale = optarg;                          break;
-      case 507: strategy_arg = optarg;                    break;
       case 508: mmap_mode = 0;                            break;
+      case 509: database_arg = optarg;                    break;
+      case 507:
+	 strategy_arg = optarg;
+	 strategy = lookup_strategy(optarg);
+	 break;
+      case 511:
+	 default_strategy_arg = optarg;
+	 default_strategy = lookup_strategy(optarg);
+	 break;
+      case 512:
+	 match_mode = 1;
+	 break;
+      case 513:
+	 disable_strategy (optarg);
+	 break;
       case 'h':
       default:  help(); exit(0);                          break;
       }
 
-   strategy = lookup_strategy (strategy_arg);
-   if (-1 == strategy){
-      fprintf (stderr, "'%s' is invalid strategy\n", strategy_arg);
+   if (
+      -1 == strategy ||
+      (strategy_arg = without_strategy_arg, NULL == without_strategy) ||
+      (strategy_arg = default_strategy_arg, -1 == default_strategy))
+   {
+      fprintf (stderr, "%s is not a valid search strategy\n", strategy_arg);
       fprintf (stderr, "available ones are:\n");
       for (i = 0; i < get_strategies_count (); ++i){
 	  fprintf (
@@ -822,18 +1165,18 @@ int main( int argc, char **argv, char **envp )
 
    set_utf8_mode (locale);
    if (!setlocale(LC_ALL, locale)){
-	   fprintf (stderr, "ivalid locale '%s'\n", locale);
-	   exit (2);
+      fprintf (stderr, "invalid locale '%s'\n", locale);
+      exit (2);
    }
 
    time(&startTime);
    tim_start( "dictd" );
    alarm(_dict_markTime);
 
-   DictConfig = xmalloc(sizeof(struct dictConfig));
-   memset( DictConfig, 0, sizeof( struct dictConfig ) );
-   if (!access(configFile,R_OK))
+   if (!access(configFile,R_OK)) {
       prs_file_nocpp( configFile );
+      postprocess_filenames (DictConfig);
+   }
 
 
                                 /* Open up logs for sanity check */
@@ -845,29 +1188,18 @@ int main( int argc, char **argv, char **envp )
 
    
    if (testWord) {		/* stand-alone test mode */
-      lst_List list = lst_create();
-
       dict_config_print( NULL, DictConfig );
       dict_init_databases( DictConfig );
-      if (dict_search (
-	 list,
-	 testWord,
-	 lst_nth_get( DictConfig->dbl, 1 ),
-	 strategy ))
-      {
-	 if (dbg_test(DBG_VERBOSE))
-	    dict_dump_list( list );
 
-	 dict_dump_defs( list, lst_nth_get( DictConfig->dbl, 1 ) );
-	 dict_destroy_list( list );
-      } else {
-	 printf( "No match\n" );
-      }
+      dict_make_dbs_available (DictConfig);
+
+      dict_test (testWord, strategy);
+
       fprintf( stderr, "%d comparisons\n", _dict_comparisons );
 
       dict_close_databases (DictConfig);
 
-      deinit ();
+      destroy ();
 
       exit( 0 );
    }
@@ -875,7 +1207,6 @@ int main( int argc, char **argv, char **envp )
    if (testFile) {
       FILE         *str;
       char         buf[1024], *pt;
-      dictDatabase *db = lst_nth_get(DictConfig->dbl, 1);
       int          words = 0;
 
       if (!(str = fopen(testFile,"r")))
@@ -883,10 +1214,9 @@ int main( int argc, char **argv, char **envp )
 
       dict_config_print( NULL, DictConfig );
       dict_init_databases( DictConfig );
+      dict_make_dbs_available (DictConfig);
+
       while (fgets(buf,1024,str)) {
-         lst_List list = lst_create();
-
-
          word_len = strlen( buf );
          if (word_len > 0){
             if ('\n' == buf [word_len - 1]){
@@ -899,17 +1229,9 @@ int main( int argc, char **argv, char **envp )
 
          if (buf[0]){
 	    ++words;
-/*	    fprintf( stderr, "searching for word: \"%s\" size: %i\n", buf, strlen( buf ));*/
-            if (dict_search ( list, buf, db, strategy )) {
-	       if (dbg_test(DBG_VERBOSE))
-		  dict_dump_list( list );
-
-	       dict_dump_defs( list, db );
-            } else {
-               fprintf( stderr, "*************** No match for \"%s\"\n", buf );
-            }
+            dict_test (buf, strategy);
          }
-         dict_destroy_list( list );
+
          if (words && !(words % 1000))
             fprintf( stderr,
                      "%d comparisons, %d words\n", _dict_comparisons, words );
@@ -921,7 +1243,7 @@ int main( int argc, char **argv, char **envp )
 
       dict_close_databases (DictConfig);
 
-      deinit ();
+      destroy ();
 
       exit(0);
       /* Comparisons:
@@ -934,7 +1256,7 @@ int main( int argc, char **argv, char **envp )
    }
 
    setsig(SIGCHLD, reaper, SA_RESTART);
-   setsig(SIGHUP,  handler, 0);
+   setsig(SIGHUP,  handler_sighup, 0);
    if (!dbg_test(DBG_NOFORK))
       setsig(SIGINT,  handler, 0);
    setsig(SIGQUIT, handler, 0);
@@ -964,7 +1286,6 @@ int main( int argc, char **argv, char **envp )
    if (dbg_test(DBG_VERBOSE)) dict_config_print( NULL, DictConfig );
    dict_init_databases( DictConfig );
 
-   
    dict_initsetproctitle(argc, argv, envp);
 
    for (;;) {
@@ -1010,5 +1331,5 @@ int main( int argc, char **argv, char **envp )
 
    dict_close_databases (DictConfig);
 
-   deinit ();
+   destroy ();
 }
