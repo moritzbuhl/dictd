@@ -17,7 +17,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: daemon.c,v 1.69 2003/10/31 00:40:04 cheusov Exp $
+ * $Id: daemon.c,v 1.74 2004/03/06 15:27:54 cheusov Exp $
  * 
  */
 
@@ -458,6 +458,10 @@ static void daemon_crlf( char *d, const char *s, int dot )
       }
    }
    if (dot) {                   /* add final . */
+      if (!first){
+	 *d++ = '\r';
+	 *d++ = '\n';
+      }
       *d++ = '.';
       *d++ = '\r';
       *d++ = '\n';
@@ -480,7 +484,7 @@ static void daemon_printf( const char *format, ... )
       daemon_terminate( 0, __FUNCTION__ );
    }
 
-   pt = alloca(2*len);
+   pt = alloca(2*len + 10); /* +10 for the case when buf == "\n"*/
    daemon_crlf(pt, buf, 0);
    daemon_write(pt, strlen(pt));
 }
@@ -853,21 +857,28 @@ static dictDatabase *next_database (
       if (*databasePosition) {
 	 do {
 	    db = lst_get_position( *databasePosition );
+
 	    *databasePosition = lst_next_position( *databasePosition );
-	 } while (db && !db->available);
+	 } while ( db && (!db->available || db->invisible));
       }
       return db;
    } else {
       while (*databasePosition) {
          db = lst_get_position( *databasePosition );
 	 *databasePosition = lst_next_position( *databasePosition );
-         if (db && !strcmp(db -> databaseName,name) && !db -> invisible) {
-	    if (db->available)
+
+         if (db){
+	    if (
+	       !db -> invisible && db->available &&
+	       !strcmp(db -> databaseName,name))
+	    {
 	       return db;
-	    else
-               return NULL;
+	    }
+	 }else{
+	    return NULL;
 	 }
       }
+
       return NULL;
    }
 }
@@ -880,9 +891,9 @@ static int count_databases( void )
    lst_Position databasePosition = first_database_pos ();
 
    while (NULL != (db = next_database (&databasePosition, "*"))){
-      if (!db->invisible){
-	 ++count;
-      }
+      assert (!db -> invisible);
+
+      ++count;
    }
 
    return count;
@@ -1061,10 +1072,11 @@ static void daemon_show_db( const char *cmdline, int argc, char **argv )
 
       daemon_mime();
       while ((db = next_database(&databasePosition, "*"))) {
-	 if (!db->invisible){
-	    daemon_printf( "%s \"%s\"\n",
-			   db->databaseName, db->databaseShort );
-	 }
+	 assert (!db->invisible);
+
+	 daemon_printf(
+	    "%s \"%s\"\n",
+	    db->databaseName, db->databaseShort );
       }
       daemon_printf( ".\n" );
       daemon_ok( CODE_OK, "ok", NULL );
@@ -1124,7 +1136,7 @@ static void daemon_show_info( const char *cmdline, int argc, char **argv )
    }
 
    list = lst_create();
-   while ((db = next_database(&databasePosition, argv[2] ))) {
+   while ((db = next_database(&databasePosition, argv[2]))) {
       if (db -> databaseInfo && db -> databaseInfo [0] != '@'){
 	 daemon_printf( "%d information for %s\n",
 			CODE_DATABASE_INFO, argv[2] );
@@ -1179,6 +1191,30 @@ static void daemon_show_info( const char *cmdline, int argc, char **argv )
 		  CODE_INVALID_DB );
 }
 
+static int daemon_get_max_dbname_length ()
+{
+   size_t max_len  = 0;
+   size_t curr_len = 0;
+
+   const dictDatabase *db;
+
+   lst_Position databasePosition = first_database_pos ();
+
+   while (NULL != (db = next_database (&databasePosition, "*"))){
+      assert (!db -> invisible);
+
+      if (db -> databaseName){
+	 curr_len = strlen (db -> databaseName);
+
+	 if (curr_len > max_len){
+	    max_len = curr_len;
+	 }
+      }
+   }
+
+   return (int) max_len;
+}
+
 static void daemon_show_server( const char *cmdline, int argc, char **argv )
 {
    FILE          *str;
@@ -1219,8 +1255,9 @@ static void daemon_show_server( const char *cmdline, int argc, char **argv )
 	 int data_length     = 0;
 	 char data_length_uom= 'k';
 
-	 if (db -> invisible)
-	    continue;
+	 int max_dbname_len = 0;
+
+	 assert (!db -> invisible);
 
 	 if (db->index){
 	    index_size = db->index->size/1024 > 10240 ?
@@ -1238,8 +1275,13 @@ static void daemon_show_server( const char *cmdline, int argc, char **argv )
 	    data_length_uom = db->data->length/1024 > 10240 ? 'M' : 'k';
 	 }
 
+	 max_dbname_len = daemon_get_max_dbname_length ();
+
 	 daemon_printf(
-	    "%-12.12s %10lu %10lu %cB %10lu %cB %10lu %cB\n",
+	    "%-*.*s %10lu %10lu %cB %10lu %cB %10lu %cB\n",
+	    max_dbname_len,
+	    max_dbname_len,
+
 	    db->databaseName,
 	    headwords,
 

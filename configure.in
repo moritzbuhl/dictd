@@ -18,7 +18,7 @@ dnl You should have received a copy of the GNU General Public License along
 dnl with this program; if not, write to the Free Software Foundation, Inc.,
 dnl 675 Mass Ave, Cambridge, MA 02139, USA.
 dnl
-dnl $Id: configure.in,v 1.68 2003/12/08 18:28:04 cheusov Exp $
+dnl $Id: configure.in,v 1.73 2004/03/11 16:34:59 cheusov Exp $
 dnl
 dnl Flag conventions:
 dnl     CFLAGS and LDFLAGS should be settable on the make commandline
@@ -32,11 +32,11 @@ dnl     YCFLAGS is for yacc
 dnl     LCFLAGS is for lex
 
 
-define(VERSION, 1.9.11)
+define(VERSION, 1.9.12)
 
 
 AC_PREREQ(2.53)
-AC_REVISION($Revision: 1.68 $)
+AC_REVISION($Revision: 1.73 $)
 
 AC_INIT([dict],[VERSION],["dict-beta@dict.org"])
 
@@ -233,12 +233,22 @@ echo Checking for programs
 
 AC_PROG_AWK
 AC_PROG_INSTALL
-AC_PROG_LEX
-AC_PROG_YACC
 AC_PROG_RANLIB
 AC_PROG_MAKE_SET
 dnl AC_PROG_LIBTOOL
 dnl AC_LIBTOOL_DLOPEN
+
+AC_PROG_YACC
+if ! which `echo $YACC | cut -f 1 -d ' '` >/dev/null 2>&1; then
+   AC_MSG_ERROR(['bison' is missing on your system.
+You can get `bison' from any GNU archive site.])
+fi
+
+AC_PROG_LEX
+if ! which `echo $LEX | cut -f 1 -d ' '` >/dev/null 2>&1; then
+   AC_MSG_ERROR(['flex' is missing on your system.
+You can get `flex' from any GNU archive site.])
+fi
 
 AC_CHECK_PROG(AR,ar,ar)
 
@@ -371,6 +381,7 @@ AC_CHECK_HEADERS(unistd.h strings.h limits.h)
 AC_CHECK_HEADERS(sys/resource.h sys/time.h sys/param.h sys/wait.h)
 AC_CHECK_HEADERS(wctype.h wchar.h)
 AC_CHECK_HEADER([Judy.h], ,[JUDYLIB=])
+AC_CHECK_HEADERS(langinfo.h)
 
 AC_CHECK_TYPES(wint_t,,, [#include <wchar.h>])
 AC_CHECK_TYPES(mbstate_t, , , [#include <wchar.h>])
@@ -405,11 +416,12 @@ AC_CHECK_FUNCS(socket strcasecmp strchr strrchr strstr uname)
 AC_CHECK_FUNCS(iswspace iswalnum towlower)
 AC_CHECK_FUNCS(dlopen)
 AC_CHECK_FUNCS(getopt)
-
+AC_CHECK_FUNCS(wcwidth)
 AC_REPLACE_FUNCS(setenv)
 AC_REPLACE_FUNCS(wcrtomb wctomb mbrlen mbrtowc mbstowcs mbtowc)
 AC_REPLACE_FUNCS(strlcpy strlcat)
 AC_REPLACE_FUNCS(getopt_long)
+AC_REPLACE_FUNCS(nl_langinfo)
 #   [AC_LIBOBJ([getopt_long])
 #   AC_LIBOBJ([getopt])])
 AC_REPLACE_FUNCS(snprintf vsnprintf)
@@ -487,7 +499,7 @@ else
   esac
 
   echo -n " judy plugin:    "
-  if test "$_JUDYLIB" = "_"; then
+  if test "_$JUDYLIB" = "_"; then
     echo "disabled"
   else
     echo "enabled"

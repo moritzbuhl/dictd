@@ -17,7 +17,7 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 675 Mass Ave, Cambridge, MA 02139, USA.
 # 
-# $Id: Makefile.in,v 1.94 2003/11/05 01:25:10 cheusov Exp $
+# $Id: Makefile.in,v 1.99 2004/03/11 16:34:59 cheusov Exp $
 #
 
 # Add a _letter_ if you change the version number and release your own version.
@@ -373,7 +373,7 @@ ChangeLog:
 	AWK=@AWK@ rcs2log -i 2 -r -d'1996-09-20<' . doc regex zlib libmaa \
 	| sed 's,/cvsroot/dict/dictd1/,,g; \
 	       s,/cvs/dict/dictd1/,,g;\
-	       s,cheusov..<cheusov@[^>]*,Aleksey Cheusov <vle@gmx.net,g;\
+	       s,cheusov@[^>]*,vle@gmx.net,g;\
 	       s,faith@[^>]*,faith@dict.org,g;\
 	       s,hilliard...hilliard@.*,Bob Hilliard  <hilliard@debian.org>,g; \
 	       s,tek...tek@.*,Julian Squires  <tek@wiw.org>,g; \
@@ -381,23 +381,26 @@ ChangeLog:
 	> ChangeLog;)
 
 dist:
-	@( CVSROOT=`cat CVS/Root`; \
-	export CVSROOT; \
-	VERSION=$(DICT_VERSION) ; \
-	VERSION_CVS=`echo $${VERSION} | tr . -`; \
-	export VERSION VERSION_CVS; \
-	echo "***** Exporting files for dictd-$${VERSION}..."; \
-	cd /tmp; \
-	rm -rf /tmp/dictd-$${VERSION}; \
-	cvs export -fd dictd-$${VERSION} -r dictd-$${VERSION_CVS} dictd1; \
-	cd dictd-$${VERSION}; \
-	make -f Makefile.conf; \
-	rm -rf autom4te.cache libmaa/autom4te.cache \
-	chmod -R a+rX,g-w .; \
-	cd ..; \
-	echo "***** Taring and zipping dictd-$${VERSION}.tar.gz..."; \
-	tar cvvf dictd-$${VERSION}.tar dictd-$${VERSION}; \
-	gzip -9f dictd-$${VERSION}.tar; \
+	@( CVSROOT=`cat CVS/Root` && \
+	export CVSROOT && \
+	VERSION=$(DICT_VERSION) && \
+	VERSION_CVS=`echo $${VERSION} | tr . -` && \
+	export VERSION VERSION_CVS && \
+	make ChangeLog && \
+	cp ChangeLog /tmp/dictd.ChangeLog.$${VERSION} && \
+	echo "***** Exporting files for dictd-$${VERSION}..." && \
+	cd /tmp && \
+	rm -rf /tmp/dictd-$${VERSION} && \
+	cvs export -fd dictd-$${VERSION} -r dictd-$${VERSION_CVS} dictd1 && \
+	cd dictd-$${VERSION} && \
+	mv /tmp/dictd.ChangeLog.$${VERSION} ChangeLog && \
+	make -f Makefile.conf && \
+	rm -rf autom4te.cache libmaa/autom4te.cache && \
+	chmod -R a+rX,g-w . && \
+	cd .. && \
+	echo "***** Taring and zipping dictd-$${VERSION}.tar.gz..." && \
+	tar cvvf dictd-$${VERSION}.tar dictd-$${VERSION} && \
+	gzip -9f dictd-$${VERSION}.tar && \
 	echo "***** Done making /tmp/dictd-$${VERSION}.tar.gz")
 
 .PHONY: clean distclean tags
@@ -431,10 +434,10 @@ distclean: recursive-clean
 	rm -f config.h config.cache config.status stamp-h.in stamp-h; \
 	rm -f Makefile doc/Makefile dictdplugin-config include_regex.h
 	rm -f local_* colorit dictl
+	rm -rf autom4te.cache libmaa/autom4te.cache
 
 cvsclean: distclean
 	rm -f configure libmaa/configure
-	rm -rf autom4te.cache libmaa/autom4te.cache
 
 tags:
 	etags *.[ch]

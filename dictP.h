@@ -19,7 +19,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: dictP.h,v 1.15 2003/10/31 00:40:04 cheusov Exp $
+ * $Id: dictP.h,v 1.17 2004/02/24 17:55:51 cheusov Exp $
  * 
  */
 
@@ -121,6 +121,13 @@ typedef unsigned int wint_t;
 typedef unsigned int wchar_t;
 #endif
 
+#if HAVE_LANGINFO_H
+#include <langinfo.h>
+#else
+const char * nl_langinfo (int ITEM);
+#define CODESET 1234
+#endif
+
 #if HAVE_MBSTATE_T
 #include <wchar.h>
 #else
@@ -161,6 +168,10 @@ extern int setenv(const char *name, const char *value, int overwrite);
 
 #if !HAVE_MBTOWC
 extern int mbtowc (wchar_t *pwc, const char *s, size_t n);
+#endif
+
+#if !HAVE_WCWIDTH
+#define wcwidth(x) (1)
 #endif
 
 #if USE_PLUGIN

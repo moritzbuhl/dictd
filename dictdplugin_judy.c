@@ -17,7 +17,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: dictdplugin_judy.c,v 1.17 2003/10/22 03:32:49 cheusov Exp $
+ * $Id: dictdplugin_judy.c,v 1.20 2004/02/23 19:28:25 cheusov Exp $
  * 
  */
 
@@ -100,6 +100,10 @@ typedef struct global_data_s {
 
    BOOL m_flag_allchars;
    BOOL m_flag_utf8;
+
+   char *m_alphabet_global_8bit;
+   char *m_alphabet_global_ascii;
+   char *m_alphabet;
 } global_data;
 
 int dictdb_close (void *dict_data);
@@ -147,6 +151,15 @@ static void global_data_destroy (global_data *d)
 
    if (d -> m_offs_size_array)
       xfree (d -> m_offs_size_array);
+
+   if (d -> m_alphabet)
+      xfree (d -> m_alphabet);
+
+   if (d -> m_alphabet_global_8bit)
+      xfree (d -> m_alphabet_global_8bit);
+
+   if (d -> m_alphabet_global_ascii)
+      xfree (d -> m_alphabet_global_ascii);
 
    JudySLFreeArray (&d -> m_judy_array, 0);
    heap_destroy (&d -> m_heap);
@@ -497,7 +510,7 @@ static void read_index_file (
 	    buf, buf,
 	    dict_data -> m_conf_allchars, dict_data -> m_conf_utf8))
       {
-	 plugin_error (dict_data, "tolower_alnumspace failed");
+	 plugin_error (dict_data, "tolower_alnumspace failed while reading .index file");
 	 fclose (fd);
 	 return;
       }
@@ -610,6 +623,47 @@ static void init_data_file (global_data *dict_data)
    dict_data -> m_data = dict_data_open (dict_data -> m_conf_data_fn, 0);
 }
 
+static void init_alphabet (global_data *dict_data)
+{
+   int ret = 0;
+   int exit_code = 0;
+   const char * const* defs;
+   const int * defs_sizes;
+   int count = 0;
+   int len = 0;
+   char *p = NULL;
+   char *alphabet = NULL;
+
+   assert (dict_data);
+
+   exit_code = dictdb_search (
+      dict_data, "00-database-alphabet", -1,
+      dict_data -> m_strat_exact,
+      &ret,
+      NULL, 0,
+      &defs, &defs_sizes,
+      &count);
+
+   if (!exit_code && ret == DICT_PLUGIN_RESULT_FOUND && count > 0){
+      if (-1 == defs_sizes [0])
+	 len = strlen (defs [0]);
+      else
+	 len = defs_sizes [0];
+
+      alphabet = dict_data -> m_alphabet = xmalloc (len + 1);
+      memcpy (alphabet, defs [0], len);
+      alphabet [len] = 0;
+
+      p = strchr (alphabet, '\n');
+      if (p)
+	 *p = 0;
+
+/*      fprintf (stderr, "alphabet = `%s`\n", alphabet);*/
+   }
+
+   dictdb_free (dict_data);
+}
+
 int dictdb_open (
    const dictPluginData *init_data,
    int init_data_size,
@@ -678,13 +732,23 @@ int dictdb_open (
 	    }
 	 }
 	 break;
+
       case DICT_PLUGIN_INITDATA_DEFDBDIR:
 	 strlcpy (
 	    dict_data -> m_default_db_dir,
 	    init_data [i].data,
 	    sizeof (dict_data -> m_default_db_dir));
+	 break;
+
+      case DICT_PLUGIN_INITDATA_ALPHABET_8BIT:
+	 dict_data -> m_alphabet_global_8bit = xstrdup (init_data [i].data);
 
 	 break;
+      case DICT_PLUGIN_INITDATA_ALPHABET_ASCII:
+	 dict_data -> m_alphabet_global_ascii = xstrdup (init_data [i].data);
+
+	 break;
+
       default:
 	 break;
       }
@@ -701,6 +765,8 @@ int dictdb_open (
       return 8;
    }
 
+   init_alphabet (dict_data);
+
 /*   debug_print (dict_data); */
    return 0;
 }
@@ -708,7 +774,6 @@ int dictdb_open (
 int dictdb_close (void *data)
 {
    global_data_destroy (data);
-
    return 0;
 }
 
@@ -817,106 +882,47 @@ static int match_prefix (
    return 0;
 }
 
-#define CHECK \
-   if (buf [0]){                                              \
-      value = JudySLGet (dict_data -> m_judy_array, buf, 0);  \
-      if (value && strcmp (prev_buf, buf)){                   \
-         strlcpy (prev_buf, buf, BUFSIZE);                    \
+#define CHECK(word, dict_data) \
+   if ((word) [0]){                                              \
+      value = JudySLGet ((dict_data) -> m_judy_array, (word), 0);\
+      if (value && strcmp (prev_buf, (word))){                   \
+         strlcpy (prev_buf, (word), BUFSIZE);                    \
                                                               \
-         ++dict_data -> m_mres_count;                         \
+         ++(dict_data) -> m_mres_count;                       \
                                                               \
-         dict_data -> m_mres = (const char **)                \
+         (dict_data) -> m_mres = (const char **)              \
             heap_realloc (                                    \
-               dict_data -> m_heap2,                          \
-               dict_data -> m_mres,                           \
-               dict_data -> m_mres_count                      \
-                  * sizeof (dict_data -> m_mres [0]));        \
-         dict_data -> m_mres [dict_data -> m_mres_count - 1] =\
-            heap_strdup (dict_data -> m_heap, buf);           \
+               (dict_data) -> m_heap2,                        \
+               (dict_data) -> m_mres,                         \
+               (dict_data) -> m_mres_count                    \
+                  * sizeof ((dict_data) -> m_mres [0]));      \
+         (dict_data) -> m_mres [(dict_data) -> m_mres_count - 1] = \
+            heap_strdup ((dict_data) -> m_heap, (word));      \
       }                                                       \
    }
+
+#define LEV_VARS \
+   PPvoid_t value; \
+   char prev_buf [BUFSIZE] = ""; \
+   char tmp;
+
+#define LEV_ARGS global_data
+
+static char const global_alphabet [] =
+   "qwertyuiopasdfghjklzxcvbnm0123456789";
+
+#include "lev.h"
 
 static int match_lev (
    global_data *dict_data,
    const char *word)
 {
-   size_t len;
-   char buf [BUFSIZE];
-   int i, j, k;
-   char *p;
-   char tmp;
-   PPvoid_t value;
-   char prev_buf [BUFSIZE] = "";
+   const char *alphabet = dict_data -> m_alphabet;
 
-   static char const c [] = "qwertyuiopasdfghjklzxcvbnm0123456789"; /* fix this*/
-   static int const charcount = sizeof (c) - 1;
+   if (!alphabet)
+      alphabet = global_alphabet;
 
-   len = strlen (word);
-   if (len >= BUFSIZE)
-      len = BUFSIZE - 10;
-
-                                /* Transpositions */
-   strlcpy( buf, word, sizeof (buf) );
-   CHECK; /* checking word inself */
-   for (i = 1; i < len; i++) {
-      tmp = buf [i-1];
-      buf [i-1] = buf [i];
-      buf [i] = tmp;
-
-      CHECK;
-
-      tmp = buf [i-1];
-      buf [i-1] = buf [i];
-      buf [i] = tmp;
-   }
-
-				/* Deletions */
-   for (i = 0; i < len; i++) {
-      p = buf;
-      for (j = 0; j < len; j++)
-	 if (i != j)
-	    *p++ = word [j];
-
-      *p = '\0';
-      CHECK;
-   }
-
-				/* Insertions */
-   for (i = 0; i < len; i++) {
-      for (k = 0; k < charcount; k++) {
-	 p = buf;
-         for (j = 0; j < len; j++) {
-            *p++ = word [j];
-            if (i == j)
-	       *p++ = c [k];
-         }
-         *p = '\0';
-	 CHECK;
-      }
-   }
-
-                                /* Insertions at the beginning */
-   strlcpy (buf + 1, word, BUFSIZE - 1);
-   for (k = 0; k < charcount; k++) {
-      buf [0] = c [k];
-      CHECK;
-   }
-
-                                  /* Substitutions */
-   strlcpy (buf, word, BUFSIZE);
-   for (i = 0; i < len; i++) {
-      for (j = 0; j < charcount; j++) {
-	 if (buf [i] != c [j]){
-	    tmp = buf [i];
-	    buf [i] = c [j];
-
-	    CHECK;
-
-	    buf [i] = tmp;
-	 }
-      }
-   }
-
+   dict_search_lev (word, alphabet, dict_data -> m_flag_utf8, dict_data);
    return 0;
 }
 
@@ -971,7 +977,7 @@ int dictdb_search (
 	 word_copy2, word_copy2,
 	 dict_data -> m_conf_allchars, dict_data -> m_conf_utf8))
    {
-      plugin_error (dict_data, "tolower_alnumspace failed");
+      plugin_error (dict_data, "tolower_alnumspace in dictdb_search failed");
       return 1;
    }
 
@@ -1054,7 +1060,7 @@ int dictdb_search (
 	 dict_data -> m_mres [i] =
 	    dict_data_read_ (
 	       dict_data -> m_data,
-	       (*offs_size) [0], (*offs_size) [1],
+	       (*offs_size) [i + i], (*offs_size) [i + i + 1],
 	       NULL, NULL);
       }
 

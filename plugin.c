@@ -15,7 +15,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: plugin.c,v 1.11 2003/11/03 00:28:52 cheusov Exp $
+ * $Id: plugin.c,v 1.14 2004/01/16 19:30:29 cheusov Exp $
  * 
  */
 
@@ -321,10 +321,6 @@ static int plugin_initdata_set_stratnames (
 
 static int plugin_initdata_set_defdbdir (dictPluginData *data, int data_size)
 {
-   const dictDatabase *db;
-   int count;
-   int i;
-
    if (data_size <= 0)
       err_fatal (__FUNCTION__, "too small initial array");
 
@@ -335,7 +331,33 @@ static int plugin_initdata_set_defdbdir (dictPluginData *data, int data_size)
    return 1;
 }
 
-/* all dict [i]->data are xmalloc'd*/
+static int plugin_initdata_set_alphabet_8bit (
+   dictPluginData *data, int data_size)
+{
+   if (data_size <= 0)
+      err_fatal (__FUNCTION__, "too small initial array");
+
+   data -> size = -1;
+   data -> data = xstrdup (global_alphabet_8bit);
+   data -> id   = DICT_PLUGIN_INITDATA_ALPHABET_8BIT;
+
+   return 1;
+}
+
+static int plugin_initdata_set_alphabet_ascii (
+   dictPluginData *data, int data_size)
+{
+   if (data_size <= 0)
+      err_fatal (__FUNCTION__, "too small initial array");
+
+   data -> size = -1;
+   data -> data = xstrdup (global_alphabet_ascii);
+   data -> id   = DICT_PLUGIN_INITDATA_ALPHABET_ASCII;
+
+   return 1;
+}
+
+/* all dict [i]->data are xmalloc'ed */
 static int plugin_initdata_set (
    dictPluginData *data, int data_size,
    const dictDatabase *db)
@@ -356,6 +378,14 @@ static int plugin_initdata_set (
    data_size -= count;
 
    count = plugin_initdata_set_data (data, data_size, db);
+   data      += count;
+   data_size -= count;
+
+   count = plugin_initdata_set_alphabet_8bit (data, data_size);
+   data      += count;
+   data_size -= count;
+
+   count = plugin_initdata_set_alphabet_ascii (data, data_size);
    data      += count;
    data_size -= count;
 
@@ -485,6 +515,7 @@ static void dict_plugin_dlsym (dictPlugin *plugin)
 }
 
 static dictPlugin *create_plugin (
+   const char *datababsename,
    const char *plugin_filename,
    const dictPluginData *plugin_init_data,
    int plugin_init_data_size)
@@ -493,7 +524,10 @@ static dictPlugin *create_plugin (
    int ret;
    int version;
 
-   PRINTF(DBG_INIT, (":I:   Initializing plugin '%s'\n", plugin_filename));
+   PRINTF(
+      DBG_INIT, (
+	 ":I:   Initializing db/plugin '%s'/'%s'\n",
+	 datababsename ? datababsename : "(null)", plugin_filename));
 
    plugin = xmalloc (sizeof (dictPlugin));
    memset (plugin, 0, sizeof (dictPlugin));
@@ -521,7 +555,7 @@ int dict_plugin_init (dictDatabase *db)
    int ret = 0;
    lst_List list;
    const char *plugin_filename = NULL;
-   dictWord *dw;
+  dictWord *dw;
 
    dictPluginData init_data [3000];
    int init_data_size = 0;
@@ -556,6 +590,7 @@ int dict_plugin_init (dictDatabase *db)
 	 db);
 
       db -> plugin = create_plugin (
+	 db -> databaseName,
 	 plugin_filename, init_data, init_data_size);
 
       plugin_init_data_free (init_data, init_data_size);
@@ -588,21 +623,6 @@ void dict_plugin_destroy ( dictDatabase *db )
 
    xfree (db -> plugin);
    db -> plugin = NULL;
-}
-
-static int call_dictdb_free1 (const void *datum)
-{
-   const dictDatabase *db = (const dictDatabase *) datum;
-
-   if (db -> plugin){
-      if (db -> plugin -> dictdb_free_called){
-	 db -> plugin -> dictdb_free (db -> plugin -> data);
-
-	 db -> plugin -> dictdb_free_called = 0;
-      }
-   }
-
-   return 0;
 }
 
 void call_dictdb_free (lst_List db_list)

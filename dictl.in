@@ -10,15 +10,24 @@ if test -z "$DICTL_SERVER_CHARSET"; then
 fi
 
 if test -z "$DICTL_CHARSET"; then
-    DICTL_CHARSET=`locale | sed -n '/^LC_CTYPE=/ { s/"\|^.*\.//g; p; }'`
+    if which locale >/dev/null 2>&1; then
+	DICTL_CHARSET=`locale -k LC_CTYPE | sed -n 's/charmap="\(.*\)"/\1/p'`;
+    else
+	DICTL_CHARSET=C
+    fi
 fi
 
 if test -z "$DICTL_PAGER"; then
     if test -r "$HOME/.dictrc"; then
 	DICTL_PAGER=`awk '$1 == "pager" {print $2}' < "$HOME/.dictrc"`
-	if test -z "$DICTL_PAGER" && test -r "$sysconfdir/dict.conf"; then
-	    DICTL_PAGER=`awk '$1 == "pager" {print $2}' < $sysconfdir/dict.conf`
-	fi
+    fi
+
+    if test -z "$DICTL_PAGER" && test -r "$sysconfdir/dict.conf"; then
+	DICTL_PAGER=`awk '$1 == "pager" {print $2}' < $sysconfdir/dict.conf`
+    fi
+
+    if test -z "$DICTL_PAGER"; then
+	DICTL_PAGER=$PAGER
     fi
 
     if test -z "$DICTL_PAGER"; then
@@ -36,14 +45,39 @@ charset2charset (){
     fi fi
 }
 
+#####################################
+
 if
     test "_$DICTL_CHARSET" = "_C" ||
-    test "_$DICTL_CHARSET" = "_POSIX" ||
-    test "_$DICTL_SERVER_CHARSET" = "_C" ||
-    test "_$DICTL_SERVER=CHARSET" = "_POSIX"
+    test "_$DICTL_CHARSET" = "_POSIX"
 then
-    echo "iconv/recode/konwert do not support coversions to or from $charset"
+    echo "iconv/recode/konwert do not support coversions to/from locale \"$DICTL_CHARSET\""
     exit 1
+fi
+
+if
+    test "_$DICTL_SERVER_CHARSET" = "_C" ||
+    test "_$DICTL_SERVER_CHARSET" = "_POSIX"
+then
+    echo "iconv/recode/konwert do not support coversions to/from locale \"$DICTL_SERVER_CHARSET\""
+    exit 1
+fi
+
+if test "$DICTL_USE_ICONV"; then
+    if ! which iconv >/dev/null 2>&1; then
+	echo "'iconv' is not availbale. See dictl(1) for a help." 1>&2
+	exit 2
+    fi
+elif test "$DICTL_USE_KONWERT"; then
+    if ! which konwert >/dev/null 2>&1; then
+	echo "'konwert' is not availbale. See dictl(1) for a help." 1>&2
+	exit 2
+    fi
+else
+    if ! which recode >/dev/null 2>&1; then
+	echo "'recode' is not availbale. See dictl(1) for a help." 1>&2
+	exit 2
+    fi
 fi
 
 #####################################
@@ -59,7 +93,7 @@ while test $# -ne 0; do
 	    DICTL_PAGER=$2
 	    shift;;
 	*)
-	    p=`echo $1 | charset2charset $DICTL_CHARSET $DICTL_SERVER_CHARSET`
+	    p=`echo "$1" | charset2charset $DICTL_CHARSET $DICTL_SERVER_CHARSET`
 	    params="$params '$p'"
 
 	    # ...to be comatible with dict

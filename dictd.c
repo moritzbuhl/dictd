@@ -17,7 +17,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: dictd.c,v 1.100 2003/12/08 17:14:47 cheusov Exp $
+ * $Id: dictd.c,v 1.104 2004/02/24 17:55:51 cheusov Exp $
  * 
  */
 
@@ -596,6 +596,33 @@ void dict_disable_strat (dictDatabase *db, const char* strategy)
    }
 }
 
+static void init_database_alphabet (dictDatabase *db)
+{
+   int ret;
+   lst_List l;
+   const dictWord *dw;
+   char *data;
+
+   if (!db -> normal_db)
+      return;
+
+   l = lst_create ();
+
+   ret = dict_search_database_ (l, DICT_FLAG_ALPHABET, db, DICT_EXACT);
+
+   if (ret){
+      dw = (const dictWord *) lst_top (l);
+      data = dict_data_obtain (db, dw);
+      db -> alphabet = data;
+
+      data = strchr (db -> alphabet, '\n');
+      if (data)
+	 *data = 0;
+   }
+
+   dict_destroy_list (l);
+}
+
 static int init_database( const void *datum )
 {
    dictDatabase *db = (dictDatabase *)datum;
@@ -639,6 +666,13 @@ static int init_database( const void *datum )
    }
 
    db->data         = dict_data_open( db->dataFilename, 0 );
+
+   init_database_alphabet (db);
+   if (db -> alphabet){
+      PRINTF (DBG_INIT, (":I:   alphabet: %s\n", db -> alphabet));
+   }else{
+      PRINTF (DBG_INIT, (":I:   alphabet: (NULL)\n"));
+   }
 
    if (db->dataFilename){
       PRINTF(DBG_INIT,
@@ -709,6 +743,8 @@ static int close_database (const void *datum)
       xfree ((void *) db -> pluginFilename);
    if (db -> strategy_disabled)
       xfree ((void *) db -> strategy_disabled);
+   if (db -> alphabet)
+      xfree ((void *) db -> alphabet);
 
    return 0;
 }
@@ -860,7 +896,7 @@ const char *dict_get_banner( int shortFlag )
 {
    static char    *shortBuffer = NULL;
    static char    *longBuffer = NULL;
-   const char     *id = "$Id: dictd.c,v 1.100 2003/12/08 17:14:47 cheusov Exp $";
+   const char     *id = "$Id: dictd.c,v 1.104 2004/02/24 17:55:51 cheusov Exp $";
    struct utsname uts;
    
    if (shortFlag && shortBuffer) return shortBuffer;
@@ -1107,27 +1143,34 @@ static void sanity(const char *confFile)
    }
 }
 
-static void set_utf8bit_mode (const char *loc)
+static void set_locale_and_flags (const char *loc)
 {
-   char *locale_copy;
-   locale_copy = strdup (loc);
-   strlwr_8bit (locale_copy);
+   const char *charset = NULL;
+   int ascii_mode;
 
-   utf8_mode =
-       strstr (locale_copy, "utf-8") ||
-       strstr (locale_copy, "utf8");
+   if (!setlocale(LC_COLLATE, loc) || !setlocale(LC_CTYPE, loc)){
+      fprintf (stderr, "invalid locale '%s'\n", locale);
+      exit (2);
+   }
+
+   charset = nl_langinfo (CODESET);
+
+   utf8_mode = !strcmp (charset, "UTF-8");
 
 #if !HAVE_UTF8
    if (utf8_mode){
       err_fatal (
 	 __FUNCTION__,
-	 "utf-8 support is disabled at compile time\n");
+	 "utf-8 support was disabled at compile time\n");
    }
 #endif
 
-   bit8_mode = !utf8_mode && (locale_copy [0] != 'c' || locale_copy [1] != 0);
+   ascii_mode = 
+      !strcmp (charset, "ANSI_X3.4-1968") ||
+      !strcmp (charset, "US-ASCII") ||
+      (locale [0] == 'C' && locale [1] == 0);
 
-   free (locale_copy);
+   bit8_mode = !ascii_mode && !utf8_mode;
 }
 
 static void init (const char *fn)
@@ -1176,12 +1219,16 @@ static void dict_test (
 
    count = dict_search_databases (l, NULL, database_arg, word, strategy, &db_found);
 
-   if (!nooutput_mode){
-      if (count != 0){
-	 dict_dump_defs (l);
-      }else{
-	 fprintf (stderr, "No definitions found for \"%s\"\n", word);
+   if (db_found){
+      if (!nooutput_mode){
+	 if (count > 0){
+	    dict_dump_defs (l);
+	 }else{
+	    fprintf (stderr, "No definitions found for \"%s\"\n", word);
+	 }
       }
+   }else{
+      fprintf (stderr, "%s is not a valid database\n", database_arg);
    }
 
 #ifdef USE_PLUGIN
@@ -1388,12 +1435,7 @@ int main( int argc, char **argv, char **envp )
    if (flg_test(LOG_TIMESTAMP)) log_option( LOG_OPTION_FULL );
    else                         log_option( LOG_OPTION_NO_FULL );
 
-   set_utf8bit_mode (locale);
-
-   if (!setlocale(LC_ALL, locale)){
-      fprintf (stderr, "invalid locale '%s'\n", locale);
-      exit (2);
-   }
+   set_locale_and_flags (locale);
 
    time(&startTime);
    tim_start( "dictd" );

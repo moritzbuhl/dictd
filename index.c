@@ -17,7 +17,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: index.c,v 1.82 2003/11/26 14:47:35 cheusov Exp $
+ * $Id: index.c,v 1.88 2004/01/16 19:30:29 cheusov Exp $
  * 
  */
 
@@ -26,6 +26,7 @@
 #include "index.h"
 #include "include_regex.h"
 #include "strategy.h"
+#include "str.h"
 
 #ifdef USE_PLUGIN
 #include "plugin.h"
@@ -65,6 +66,9 @@ static int isspacepuncttab [UCHAR_MAX + 1];
 static int char2indextab[UCHAR_MAX + 2];
 static int index2chartab[UCHAR_MAX + 2];
 
+char global_alphabet_8bit [UCHAR_MAX + 2];
+char global_alphabet_ascii [UCHAR_MAX + 2];
+
 static int chartab [UCHAR_MAX + 1];
 static int charcount = 0;
 
@@ -98,6 +102,25 @@ static int dict_table_init_compare_utf8 (const void *a, const void *b)
 	c2 = tolower (c2);
 
     return c1 - c2;
+}
+
+static void dict_make_global_alphabet (void)
+{
+   int i;
+   int j = 0;
+   int ch;
+
+   for (i=0; i < charcount; ++i){
+      global_alphabet_8bit [i] = ch = index2chartab [c(i)];
+
+      if (ch < 128)
+	 global_alphabet_ascii [j++] = ch;
+   }
+
+   global_alphabet_8bit  [charcount] = 0;
+   global_alphabet_ascii [j] = 0;
+
+//   fprintf (stderr, "global_alphabet = '%s'\n", global_alphabet);
 }
 
 static void dict_table_init(void)
@@ -175,6 +198,9 @@ static void dict_table_init(void)
 		c2i(i), c2i(i),
 		i2c(c2i(i)), (char) i2c(c2i(i)) ? i2c(c2i(i)) : '.');
    }
+
+
+   dict_make_global_alphabet ();
 }
 
 static int compare_allchars(
@@ -1121,94 +1147,53 @@ static int dict_search_soundex( lst_List l,
 
 */
 
-static int dict_search_levenshtein( lst_List l,
-				    const char *word,
-				    const dictDatabase *database,
-				    dictIndex *dbindex)
-{
-   int        len   = strlen(word);
-   char       *buf  = alloca(len+2);
-   char       *p    = buf;
-   int        count = 0;
-   set_Set    s     = set_create(NULL,NULL);
-   int        i, j, k;
-   const char *pt;
-   char       tmp;
-   dictWord   *datum;
+typedef struct lev_args_ {
+   const dictDatabase *database;
+   dictIndex          *dbindex;
+   lst_List            l;
+} LEV_ARGS;
 
-   assert (dbindex);
-
-#define CHECK                                         \
-   if ((pt = dict_index_search(buf, dbindex))           \
-       && !compare(buf, dbindex, pt, dbindex->end)) {            \
-      if (!set_member(s,buf)) {                       \
-	 ++count;                                     \
-	 set_insert(s,str_find(buf));                 \
-	 datum = dict_word_create(pt, database, dbindex);\
-	 lst_append(l, datum);                        \
-         PRINTF(DBG_LEV,("  %s added\n",buf));        \
+#define CHECK(word, args)                                \
+   if ((pt = dict_index_search((word), (args) -> dbindex))         \
+       && !compare((word), (args) -> dbindex, pt, (args) -> dbindex -> end)) \
+   { \
+      if (!set_member(s,(word))) {                       \
+	 ++count;                                        \
+	 set_insert(s,str_find((word)));                 \
+	 datum = dict_word_create(pt, (args) -> database, (args) -> dbindex);\
+	 lst_append((args) -> l, datum);                        \
+         PRINTF(DBG_LEV,("  %s added\n",(word)));     \
       }                                               \
    }
 
-				/* Deletions */
-   for (i = 0; i < len; i++) {
-      p = buf;
-      for (j = 0; j < len; j++)
-	 if (i != j) *p++ = word[j];
-      *p = '\0';
-      CHECK;
-   }
-                                /* Transpositions */
-   strcpy( buf, word );
-   for (i = 1; i < len; i++) {
-      tmp = buf[i-1];
-      buf[i-1] = buf[i];
-      buf[i] = tmp;
+#define LEV_VARS \
+      char tmp;
 
-      CHECK;
+#include "lev.h"
 
-      tmp = buf[i-1];
-      buf[i-1] = buf[i];
-      buf[i] = tmp;
-   }
+static int dict_search_levenshtein (
+   lst_List l,
+   const char *word,
+   const dictDatabase *database,
+   dictIndex *dbindex)
+{
+   LEV_ARGS lev_args = { database, dbindex, l };
 
-				/* Insertions */
-   for (i = 0; i < len; i++) {
-      for (k = 0; k < charcount; k++) {
-	 p = buf;
-         for (j = 0; j < len; j++) {
-            *p++ = word[j];
-            if (i == j) *p++ = c(k);
-         }
-         *p = '\0';
-	 CHECK;
+   assert (database);
+   assert (dbindex);
+
+   if (database -> alphabet){
+      return dict_search_lev (
+	 word, database -> alphabet, dbindex -> flag_utf8, &lev_args);
+   }else{
+      if (dbindex -> flag_utf8){
+	 return dict_search_lev (
+	    word, global_alphabet_ascii, 1, &lev_args);
+      }else{
+	 return dict_search_lev (
+	    word, global_alphabet_8bit, 0, &lev_args);
       }
    }
-                                /* Insertions at the beginning */
-   strcpy( buf + 1, word );
-   for (k = 0; k < charcount; k++) {
-      buf[ 0 ] = c(k);
-      CHECK;
-   }
-
-   
-                                  /* Substitutions */
-   strcpy( buf, word );
-   for (i = 0; i < len; i++) {
-      for (j = 0; j < charcount; j++) {
-	 if (buf[i] != c(j)){
-	    tmp = buf [i];
-	    buf[i] = c(j);
-	    CHECK;
-	    buf [i] = tmp;
-	 }
-      }
-   }
-
-   PRINTF(DBG_LEV,("  Got %d matches\n",count));
-   set_destroy(s);
-   
-   return count;
 }
 
 /*
@@ -1554,6 +1539,9 @@ dictIndex *dict_index_open(
    int         j;
    char        buf[2];
 
+   int first_char;
+   int first_char_uc;
+
    if (!filename)
       return NULL;
 
@@ -1648,16 +1636,33 @@ dictIndex *dict_index_open(
       i->optStart[ ' ' ] = binary_search_8bit( buf, i, i->start, i->end );
 
       for (j = 0; j < charcount; j++) {
-	 buf[0] = c(j);
+	 first_char = c(j);
+
+	 buf[0] = first_char;
 	 buf[1] = '\0';
-	 i->optStart [toupper(c(j))]
-	    = i->optStart[c(j)]
+
+	 i->optStart [first_char]
 	    = binary_search_8bit( buf, i, i->start, i->end );
+
+	 if (!utf8_mode || first_char < 128){
+	    first_char_uc = toupper (first_char);
+
+	    assert (first_char_uc >= 0 && first_char_uc <= UCHAR_MAX);
+
+	    i->optStart [first_char_uc] = i->optStart [first_char];
+	 }
+
 	 if (dbg_test (DBG_SEARCH)){
-	    if (!utf8_mode || c(j) <= CHAR_MAX)
-	       printf ("optStart [%c] = %p\n", c(j), i->optStart[c(j)]);
+	    if (!utf8_mode || first_char <= CHAR_MAX)
+	       printf (
+		  "optStart [%c] = %p\n",
+		  first_char,
+		  i->optStart [first_char]);
 	    else
-	       printf ("optStart [%i] = %p\n", c(j), i->optStart[c(j)]);
+	       printf (
+		  "optStart [%i] = %p\n",
+		  first_char,
+		  i->optStart [first_char]);
 	 }
       }
 

@@ -17,7 +17,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: dictfmt.c,v 1.34 2003/12/08 17:30:02 cheusov Exp $
+ * $Id: dictfmt.c,v 1.48 2004/02/24 17:55:51 cheusov Exp $
  *
  * Sun Jul 5 18:48:33 1998: added patches for Gutenberg's '1995 CIA World
  * Factbook' from David Frey <david@eos.lugs.ch>.
@@ -47,8 +47,8 @@
 #include <getopt.h>
 #endif
 
-#define FMT_MAXPOS  200
-#define FMT_INDENT  5
+#define FMT_MAXPOS  72
+#define FMT_INDENT  0
 
 #define JARGON    1
 #define FOLDOC    2
@@ -72,11 +72,12 @@ static int quiet_mode    = 0;
 
 static const char *hw_separator = "";
 
-static int         without_hw     = 0;
-static int         without_header = 0;
-static int         without_url    = 0;
-static int         without_time   = 0;
-static int         without_info   = 0;
+static int         without_hw      = 0;
+static int         without_header  = 0;
+static int         without_url     = 0;
+static int         without_time    = 0;
+static int         without_info    = 0;
+static int         break_headwords = 0;
 
 static FILE *fmt_str;
 static int  fmt_indent;
@@ -92,6 +93,69 @@ static int ignore_hw_info      = 0;
 
 static const char *locale         = "C";
 
+static str_Pool alphabet_pool = NULL;
+
+/* analog to wcswidth(3) */
+static int mbswidth_ (const char *s)
+{
+   int ret = 0;
+   wchar_t wchar;
+
+   int width;
+   size_t len;
+   mbstate_t ps;
+
+   memset (&ps, 0, sizeof (ps));
+
+   while (*s){
+      len = mbrtowc (&wchar, s, MB_CUR_MAX, &ps);
+
+      switch (len){
+      case (size_t) (-1):
+      case (size_t) (-2):
+	 return -1;
+
+      default:
+	 width = wcwidth (wchar);
+	 if (-1 == width)
+	    width = 1; /* we also count non-printable characters */
+
+	 ret += width;
+      }
+
+      s += len;
+   }
+
+   return ret;
+}
+
+static void init (const char *fn)
+{
+   maa_init (fn);
+
+   alphabet_pool = str_pool_create ();
+}
+
+static int print_alphabet (const void *symbol, void *arg)
+{
+   printf ("%s: %s\n", (char *) arg, (const char *) symbol);
+   return 0;
+}
+
+static void destroy (void)
+{
+   str_pool_destroy (alphabet_pool);
+   alphabet_pool = NULL;
+
+//   maa_shutdown ();
+}
+
+static void destroy_and_exit (int exit_status)
+{
+   destroy ();
+   exit (exit_status);
+}
+
 static void fmt_openindex( const char *filename )
 {
    char buffer[1024];
@@ -106,7 +170,8 @@ static void fmt_openindex( const char *filename )
 
    if (!(fmt_str = popen( buffer, "w" ))) {
       fprintf( stderr, "Cannot open %s for write\n", buffer );
-      exit(1);
+
+      destroy_and_exit (1);
    }
 }
 
@@ -119,9 +184,44 @@ static void fmt_newline( void )
    }
 
    fputc('\n', str);
-   for (i = 0; i < fmt_indent; i++) fputc(' ', str);
-   fmt_pos = fmt_indent;
+   for (i = 0; i < fmt_indent; i++){
+      fputc(' ', str);
+   }
+
+   fmt_pos     = 0;
    fmt_pending = 0;
+}
+
+static void fmt_wrap_and_print (const char *s)
+{
+   size_t len;
+   int print_space;
+
+   if (utf8_mode){
+      len = mbswidth_ (s);
+      if (len == (size_t) -1)
+	 err_fatal (__FUNCTION__, "'%s' is not a valid utf-8 string\n", s);
+/*	 err_fatal (__FUNCTION__, "'%s' is not a valid utf-8 string or contains non-printable symbols\n", s);*/
+   }else{
+      len = strlen (s);
+   }
+
+   print_space = (fmt_pending || !len);
+
+   if (fmt_pos && fmt_pos + print_space + len > fmt_maxpos){
+      fmt_newline();
+   }
+
+   if (fmt_pending || !len){
+      fputc (' ', str);
+      ++fmt_pos;
+   }
+
+   if (len > 0){
+      fprintf (str, "%s", s);
+      fmt_pos += len;
+      fmt_pending = 1;
+   }
 }
 
 static void fmt_string( const char *s )
@@ -153,46 +253,16 @@ static void fmt_string( const char *s )
    *t = '\0';
 #endif
 
-   while ((pt = strchr(pt, ' '))) {
-      *pt++ = '\0';
+   while ((pt = strchr(p, ' '))) {
+      *pt = '\0';
 
-      if (utf8_mode){
-	 len = mbstowcs (NULL, p, 0);
-	 if (len == (size_t) -1)
-	    err_fatal (__FUNCTION__, "invalid utf-8 string '%s'\n", s);
-      }else{
-	 len = strlen (p);
-      }
+      fmt_wrap_and_print (p /*pt == p ? " " : p*/);
 
-      if (fmt_pending && fmt_pos + len > fmt_maxpos) {
-	 fmt_newline();
-      }
-      if (fmt_pending) {
-	 fputc(' ', str);
-	 ++fmt_pos;
-	 fmt_pending = 0;
-      }
-      fprintf( str, "%s", p );
-      fmt_pos += len;
-      p = pt;
-      fmt_pending = 1;
+      p = pt + 1;
    }
-   
-   len = strlen(p);
-   if (fmt_pending && fmt_pos + len > fmt_maxpos) {
-      fmt_newline();
-   }
-   if (len && fmt_pending) {
-      fputc(' ', str);
-      ++fmt_pos;
-      fmt_pending = 0;
-   }
-   if (!len) {
-      fmt_pending = 1;
-   } else {
-      fprintf( str, "%s", p );
-      fmt_pos += len;
-   }
+
+   if (*p)
+      fmt_wrap_and_print (p);
 
    free(sdup);
 }
@@ -347,12 +417,14 @@ static void write_hw_to_index (const char *word, int start, int end)
       new_word = malloc (len + 1);
       if (!new_word){
 	 perror ("malloc failed");
-	 exit (1);
+
+	 destroy_and_exit (1);
       }
 
       if (tolower_alnumspace (word, new_word, allchars_mode, utf8_mode)){
 	 fprintf (stderr, "'%s' is not a UTF-8 string", word);
-	 exit (1);
+
+	 destroy_and_exit (1);
       }
 
       word = trim_right (new_word);
@@ -377,6 +449,35 @@ static int contain_nonascii_symbol (const char *word)
    }
 
    return 0;
+}
+
+static void update_alphabet (const char *word)
+{
+   char *p;
+   size_t len = 0;
+   mbstate_t ps;
+   char old_char;
+
+   if (!word)
+      return;
+
+   len = strlen (word);
+   p = (char *) alloca (len + 1);
+   tolower_alnumspace (word, p, allchars_mode, utf8_mode);
+
+   memset (&ps, 0, sizeof (ps));
+
+   while (*p){
+      len = mbrlen (p, MB_CUR_MAX, &ps);
+      assert ((int) len >= 0);
+
+      old_char = p [len];
+      p [len] = 0;
+      str_pool_find (alphabet_pool, p);
+      p [len] = old_char;
+
+      p += len;
+   }
 }
 
 static void fmt_newheadword( const char *word )
@@ -429,12 +530,14 @@ static void fmt_newheadword( const char *word )
       ignore_hw_info = 1;
    }
 
+   update_alphabet (word);
+
    fmt_ignore_headword = 0;
 
    if (locale [0] == 'C' && locale [1] == 0){
       if (contain_nonascii_symbol (word)){
 	 fprintf (stderr, "\n8-bit head word \"%s\"is encountered while \"C\" locale is used\n", word);
-	 exit (1);
+	 destroy_and_exit (1);
       }
    }
 
@@ -466,10 +569,27 @@ static void fmt_newheadword( const char *word )
    }
 
    if (word) {
-      fmt_newline ();
       strlcpy(prev, word, sizeof (prev));
-
       start = end;
+   }
+
+   if (
+      word &&
+      !without_hw &&
+      strncmp (word, "00-database", 11) &&
+      strncmp (word, "00database", 10))
+   {
+     p = prev;
+     if (hw_separator[0] && break_headwords)
+       while ((sep = strstr (p, hw_separator))) {
+         *sep = 0;
+         fmt_string (p);
+         fmt_newline();
+         *sep = hw_separator[0];
+         p = sep + strlen (hw_separator);
+       }
+     fmt_string (p);
+     fmt_newline();
    }
 
    if (!quiet_mode){
@@ -551,17 +671,22 @@ static void help( FILE *out_stream )
            if no locale is specified, the \"C\" locale is used.",
 "--allchars all characters (not only alphanumeric and space)\n\
            will be used in search if this argument is supplied",
-"--headword-separator <sep> sets head word separator which allows\n\
-           several words to have the same definition\n\
-           Example: autumn%%%fall can be used\n\
-           if '--headword-separator %%%' is supplied",
-"--without-headword   head words will not be copied to .dict file",
+"--headword-separator <sep> sets headword separator which allows\n\
+                     several words to have the same definition\n\
+                     Example: autumn%%%fall can be used\n\
+                     if '--headword-separator %%%' is supplied",
+"--break-headwords    multiple headwords will be written on separate lines\n\
+                     in the .dict file.  For use with '--headword-separator.",
+"--without-headword   headwords will not be copied to .dict file",
 "--without-header     header will not be copied to DB info entry",
 "--without-url        URL will not be copied to DB info entry",
 "--without-time       time of creation will not be copied to DB info entry",
 "--without-info       DB info entry will not be created.\n\
                      This may be useful if 00-database-info headword\n\
                      is expected from stdin (dictunformat outputs it).",
+"--columns            Set the number of columns for wrapping text\n\
+                     before writing it to .dict file.\n\
+                     If it is zero, wrapping is off.",
       0 };
    const char        **p = help_msg;
 
@@ -571,25 +696,32 @@ static void help( FILE *out_stream )
 
 static void set_utf8bit_mode (const char *loc)
 {
-   char *locale_copy;
-   locale_copy = strdup (loc);
-   strlwr_8bit (locale_copy);
+   const char *charset = NULL;
+   int ascii_mode;
 
-   utf8_mode =
-      NULL != strstr (locale_copy, "utf-8") ||
-      NULL != strstr (locale_copy, "utf8");
+   if (!setlocale(LC_COLLATE, loc) || !setlocale(LC_CTYPE, loc)){
+      fprintf (stderr, "invalid locale '%s'\n", locale);
+      exit (2);
+   }
+
+   charset = nl_langinfo (CODESET);
+
+   utf8_mode = !strcmp (charset, "UTF-8");
 
 #if !HAVE_UTF8
    if (utf8_mode){
       err_fatal (
 	 __FUNCTION__,
-	 "utf-8 support is disabled at compile time\n");
+	 "utf-8 support was disabled at compile time\n");
    }
 #endif
 
-   bit8_mode = !utf8_mode && (locale_copy [0] != 'c' || locale_copy [1] != 0);
+   ascii_mode = 
+      !strcmp (charset, "ANSI_X3.4-1968") ||
+      !strcmp (charset, "US-ASCII") ||
+      (locale [0] == 'C' && locale [1] == 0);
 
-   free (locale_copy);
+   bit8_mode = !ascii_mode && !utf8_mode;
 }
 
 static const char string_unknown [] = "unknown";
@@ -599,10 +731,38 @@ static const char *sname = string_unknown;
 static void fmt_headword_for_url (void)
 {
    fmt_newheadword("00-database-url");
-   fmt_string( "     " );
    fmt_string( url );
+   fmt_newline ();
 
    ignore_hw_url = 1;
+}
+
+static void fmt_headword_for_alphabet (void)
+{
+   const char *key;
+   size_t len;
+   size_t sum_size = 0;
+   str_Position pos;
+   char *alphabet;
+
+   fmt_newheadword("00-database-alphabet");
+
+   STR_ITERATE (alphabet_pool, pos, key){
+      sum_size += strlen (key);
+   }
+
+   alphabet = xmalloc (sum_size + 1);
+   alphabet [0] = 0;
+
+   STR_ITERATE (alphabet_pool, pos, key){
+      strcat (alphabet, key);
+   }
+
+   fmt_string (alphabet);
+
+   xfree (alphabet);
+
+   fmt_newline ();
 }
 
 static void fmt_headword_for_shortname (void)
@@ -612,6 +772,7 @@ static void fmt_headword_for_shortname (void)
    fmt_newline ();
    fmt_string( "     " );
    fmt_string( sname );
+   fmt_newline ();
 
    ignore_hw_shortname = 1;
 }
@@ -627,7 +788,10 @@ static void fmt_headword_for_info (void)
       fmt_string("This file was converted from the original database on:" );
       fmt_newline();
       time(&t);
+
       snprintf( buffer, sizeof (buffer), "          %25.25s", ctime(&t) );
+      buffer [strlen (buffer) - 1] = 0; /* for removing \n */
+
       fmt_string( buffer );
       fmt_newline();
       fmt_newline();
@@ -649,7 +813,6 @@ static void fmt_headword_for_info (void)
 	 " this changed version under the same conditions and restriction"
 	 " that apply to the original version." );
       fmt_newline();
-      fmt_indent += 3;
       fmt_newline();
    }
 }
@@ -709,6 +872,7 @@ static void fmt_predefined_headwords_after ()
 {
    fmt_headword_for_url ();
    fmt_headword_for_shortname ();
+   fmt_headword_for_alphabet ();
 }
 
 int main( int argc, char **argv )
@@ -735,35 +899,52 @@ int main( int argc, char **argv )
       { "without-url",          0, 0, 507 },
       { "without-time",         0, 0, 508 },
       { "without-info",         0, 0, 509 },
+      { "columns",              1, 0, 510 },
+      { "break-headwords",      0, 0, 511 },
       { "quiet",                0, 0, 'q' },
       { "silent",               0, 0, 'q' },
       { "version",              0, 0, 'V' },
       { "license",              0, 0, 'L' },
    };
 
+   init (argv[0]);
+
    while ((c = getopt_long( argc, argv, "qVLjvfephDu:s:c:t",
                                     longopts, NULL )) != EOF)
       switch (c) {
       case 'q': quiet_mode = 1;            break;
-      case 'L': license(); exit(1);        break;
-      case 'V': banner( stdout ); exit(1); break;
-      case 501: help( stdout ); exit(1);   break;         
+      case 'L': license();
+	 destroy_and_exit (1);
+	 break;
+      case 'V': banner( stdout );
+	 destroy_and_exit (1);
+	 break;
+      case 501: help( stdout );
+	 destroy_and_exit (1);
+	 break;         
       case 'j': type = JARGON;             break;
-      case 'f': type = FOLDOC; fmt_maxpos=79; break;
+      case 'f': type = FOLDOC;             break;
       case 'e': type = EASTON;             break;
       case 'p': type = PERIODIC;           break;
-      case 'h': type = HITCHCOCK;          break;
-      case 'v': type = VERA; fmt_maxpos=75;break;
+      case 'h':
+	 type = HITCHCOCK;
+	 without_hw = 1;
+	 break;
+      case 'v': type = VERA;               break;
       case 'D': ++Debug;                   break;
       case 'u': url = optarg;              break;
       case 's': sname = optarg;            break;
       case 'c':                            
 	 switch (*optarg) {                
-	 case '5': type = CIA1995;             break;
-	 default:  fprintf( stderr,
-			    "Only CIA 1995 (-c5) currently supported\n" );
-	 exit(1);
+	 case '5': type = CIA1995;
+	    break;
+	 default:
+	    fprintf( stderr,
+		     "Only CIA 1995 (-c5) currently supported\n" );
+
+	    destroy_and_exit (1);
 	 }
+
 	 break;
       case 502: locale         = optarg;      break;
       case 503: allchars_mode  = 1;           break;
@@ -773,19 +954,30 @@ int main( int argc, char **argv )
       case 507: without_url    = 1;           break;
       case 508: without_time   = 1;           break;
       case 509: without_info   = 1;           break;
+      case 510:
+	 fmt_maxpos = atoi (optarg);
+
+	 if (fmt_maxpos <= 0){
+	    fmt_maxpos = INT_MAX;
+	 }
+	 break;
+      case 511: break_headwords = 1;          break;
       case 't':
 	 without_info = 1;
 	 without_hw   = 1;
 	 type = CIA1995;
 	 break;
+
       default:
          help (stderr);
-	 exit(1);
+	 
+	 destroy_and_exit (1);
       }
 
    if (optind + 1 != argc) {
       help (stderr);
-      exit(1);
+
+      destroy_and_exit (1);
    }
 
    set_utf8bit_mode (locale);
@@ -797,7 +989,8 @@ int main( int argc, char **argv )
 
    if (!setlocale(LC_ALL, locale)){
       fprintf (stderr, "invalid locale '%s'\n", locale);
-      exit (2);
+
+      destroy_and_exit (2);
    }
 
    if (
@@ -815,7 +1008,8 @@ int main( int argc, char **argv )
    } else {
       if (!(str = fopen(dataname, "w"))) {
 	 fprintf(stderr, "Cannot open %s for write\n", dataname);
-	 exit(1);
+
+	 destroy_and_exit (1);
       }
    }
 
@@ -836,8 +1030,14 @@ int main( int argc, char **argv )
 	    if ((pt = strchr( buffer2, ','))) {
 	       *pt = '\0';
 	       fmt_newheadword(buffer2);
-	       if (without_hw)
-		  buf = NULL;
+	       *pt = ',';
+
+//	       fprintf (stderr, "HW=`%s`\n", buffer2);
+//	       if (*pt == '\n')
+//		  ++pt;
+//	       fprintf (stderr, "DEF=`%s`\n", pt);
+
+//	       buf = pt;
 	    }
 	 }
 	 break;
@@ -863,12 +1063,14 @@ int main( int argc, char **argv )
 		     fprintf( stderr,
 			      "Unknown tag: %s (%c%c)\n",
 			      buffer2, s[1], s[2] );
-		     exit(1);
+
+		     destroy_and_exit (1);
 		  }
 		  break;
 	       default:
 		  fprintf( stderr, "Unknown tag: %s (%c)\n", buffer2, s[1] );
-		  exit(1);
+
+		  destroy_and_exit (1);
 	       }
 	       while (*s && *s != '>') s++;
 	       continue;
@@ -888,16 +1090,17 @@ int main( int argc, char **argv )
 	       if ((pt = strstr( buffer+3, " - </B>" ))) {
 		  *pt = '\0';
 		  fmt_newheadword(buffer+3);
-		  fmt_indent += 3;
-		  memmove( buf, buffer+3, strlen(buffer+3)+1 );
+		  continue;
 	       } else {
 		  fprintf( stderr, "No end: %s\n", buffer );
-		  exit(1);
+
+		  destroy_and_exit (1);
 	       }
 	       break;
 	    default:
 	       fprintf( stderr, "Unknown: %s\n", buffer );
-	       exit(1);
+
+	       destroy_and_exit (1);
 	    }
 	 } else {
 	    if (buffer[0] == ' ' && buffer[1] == ' ') fmt_newline();
@@ -913,8 +1116,7 @@ int main( int argc, char **argv )
 	       
 	       *pt = '\0';
 	       fmt_newheadword (buffer+1);
-	       memmove( buf, buffer+1, strlen(buffer+1));
-	       memmove( pt-1, s, strlen(s)+1 ); /* move \0 also */
+	       memmove( buf, s, strlen(s)+1 ); /* move \0 also */
 	    }
 	    break;
 	 case '*':
@@ -980,15 +1182,17 @@ int main( int argc, char **argv )
           }
           break;
       case FOLDOC:
-	 ++header;
-	 if (header < 3){
-	    if (without_info)
-	       continue;
-	 }else{
-	    if (*buffer && *buffer != ' ' && *buffer != '\t') {
-	       fmt_newheadword(buffer);
-	       continue;
-	    }
+         if (*buffer && *buffer != ' ' && *buffer != '\t') {
+           ++header;
+           if (header >= 3) {
+             fmt_newheadword(buffer);
+             continue;
+           }
+         }
+         if (header < 3 && without_info)
+           continue;
+	 if (*buf == ' '){
+	    ++buf;
 	 }
 	 if (*buf == '\t') {
 	    memmove( buf+2, buf, strlen(buf)+1 ); /* move \0 */
@@ -1008,21 +1212,22 @@ int main( int argc, char **argv )
 	    buf = trim_left (buf);
 
 	    if (*buf != '\0') {
+	       fmt_indent = 0;
 	       fmt_newheadword (buf);
-	       if (without_hw)
-		  buf = NULL;
+	       continue;
 	    }
  	 }
  	 break;
       default:
 	 fprintf(stderr, "Unknown input format type %d\n", type );
-	 exit(2);
+
+	 destroy_and_exit (2);
       }
       if (buf){
 	 fmt_string(buf);
 	 fmt_indent = 0;
 	 fmt_newline();
-	 fmt_indent = FMT_INDENT;
+//	 fmt_indent = FMT_INDENT;
       }
    skip:;
    }
@@ -1031,5 +1236,8 @@ int main( int argc, char **argv )
 
    fmt_closeindex();
    fclose(str);
+
+   destroy ();
+
    return 0;
 }
