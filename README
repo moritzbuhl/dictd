@@ -1,0 +1,30 @@
+
+INSTALLATION
+============
+
+    Please see the file INSTALL in this directory
+
+REPORTING BUGS
+==============
+
+    Please send all bug reports and patches to dict-beta@dict.org
+
+MAILING LISTS
+=============
+
+    There are currently two mailing lists setup relating to this
+    software and The DICT Development Group.
+
+        dict-beta@dict.org        List for server development
+
+        dict-announce@dict.org    Ultra-low volume mailing list which will
+                                  have announcements of new software and
+                                  databases.  IF YOU RUN A SERVER, PLEASE
+                                  JOIN THIS LIST!
+
+    To subscribe to either of these lists, send email to majordomo@dict.org
+    with "subscribe dict-beta" or "subscribe dict-announce" in the BODY of
+    the message.
+
+
+[README file courtesy Jeff Blain <jblaine@linus.mitre.org>]

@@ -1,0 +1,1058 @@
+/* daemon.c -- Server daemon
+ * Created: Fri Feb 28 18:17:56 1997 by faith@dict.org
+ * Revised: Fri Dec 22 06:04:36 2000 by faith@dict.org
+ * Copyright 1997, 1998, 1999, 2000 Rickard E. Faith (faith@dict.org)
+ * 
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the
+ * Free Software Foundation; either version 1, or (at your option) any
+ * later version.
+ * 
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, write to the Free Software Foundation, Inc.,
+ * 675 Mass Ave, Cambridge, MA 02139, USA.
+ * 
+ * $Id: daemon.c,v 1.32 2000/12/22 14:15:25 faith Exp $
+ * 
+ */
+
+#include "dictd.h"
+#include <ctype.h>
+#include <setjmp.h>
+#include "md5.h"
+#include "regex.h"
+
+static int          _dict_defines, _dict_matches;
+static int          daemonS;
+static const char   *daemonHostname;
+static const char   *daemonIP;
+static int          daemonPort;
+static lst_Position databasePosition;
+static char         daemonStamp[256];
+static jmp_buf      env;
+static int          daemonMime;
+
+static void daemon_define( const char *cmdline, int argc, char **argv );
+static void daemon_match( const char *cmdline, int argc, char **argv );
+static void daemon_show_db( const char *cmdline, int argc, char **argv );
+static void daemon_show_strat( const char *cmdline, int argc, char **argv );
+static void daemon_show_info( const char *cmdline, int argc, char **argv );
+static void daemon_show_server( const char *cmdline, int argc, char **argv );
+static void daemon_show( const char *cmdline, int argc, char **argv );
+static void daemon_option_mime( const char *cmdline, int argc, char **argv );
+static void daemon_option( const char *cmdline, int argc, char **argv );
+static void daemon_client( const char *cmdline, int argc, char **argv );
+static void daemon_auth( const char *cmdline, int argc, char **argv );
+static void daemon_status( const char *cmdline, int argc, char **argv );
+static void daemon_help( const char *cmdline, int argc, char **argv );
+static void daemon_quit( const char *cmdline, int argc, char **argv );
+
+static struct {
+   const char *name;
+   const char *description;
+   int        number;
+} strategyInfo[] = {
+   {"exact",     "Match words exactly",                        DICT_EXACT },
+   {"prefix",    "Match prefixes",                             DICT_PREFIX },
+   {"substring", "Match substring occurring anywhere in word", DICT_SUBSTRING},
+   {"suffix",    "Match suffixes",                             DICT_SUFFIX},
+   {"re",        "POSIX 1003.2 (modern) regular expressions",  DICT_RE },
+   {"regexp",    "Old (basic) regular expressions",            DICT_REGEXP },
+   {"soundex",   "Match using SOUNDEX algorithm",              DICT_SOUNDEX },
+   {"lev", "Match words within Levenshtein distance one", DICT_LEVENSHTEIN },
+};
+#define STRATEGIES (sizeof(strategyInfo)/sizeof(strategyInfo[0]))
+
+#define MAXARGCS 3
+static struct {
+   int        argc;
+   const char *name[MAXARGCS];
+   void       (*f)( const char *cmdline, int argc, char **argv );
+} commandInfo[] = {
+   { 1, {"define"},             daemon_define },
+   { 1, {"d"},                  daemon_define },
+   { 1, {"match"},              daemon_match },
+   { 1, {"m"},                  daemon_match },
+   { 2, {"show", "db"},         daemon_show_db },
+   { 2, {"show", "databases"},  daemon_show_db },
+   { 2, {"show", "strat"},      daemon_show_strat },
+   { 2, {"show", "strategies"}, daemon_show_strat },
+   { 2, {"show", "info"},       daemon_show_info },
+   { 2, {"show", "server"},     daemon_show_server },
+   { 1, {"show"},               daemon_show },
+   { 2, {"option", "mime"},     daemon_option_mime },
+   { 1, {"option"},             daemon_option },
+   { 1, {"client"},             daemon_client },
+   { 1, {"auth"},               daemon_auth },
+   { 1, {"status"},             daemon_status },
+   { 1, {"s"},                  daemon_status },
+   { 1, {"help"},               daemon_help },
+   { 1, {"h"},                  daemon_help },
+   { 1, {"quit"},               daemon_quit },
+   { 1, {"q"},                  daemon_quit },
+};
+#define COMMANDS (sizeof(commandInfo)/sizeof(commandInfo[0]))
+
+
+static int lookup_strategy( const char *strategy )
+{
+   int i;
+
+   if (strategy[0] == '.' && strategy[1] == '\0')
+      return DICT_DEFAULT_STRATEGY;
+   
+   for (i = 0; i < STRATEGIES; i++) {
+      if (!strcasecmp(strategy, strategyInfo[i].name))
+         return strategyInfo[i].number;
+   }
+   return -1;
+}
+
+static void *(lookup_command)( int argc, char **argv )
+{
+   int i, j;
+   int err;
+   
+   for (i = 0; i < COMMANDS; i++) {
+      if (argc >= commandInfo[i].argc) {
+	 for (err = 0, j = 0; j < commandInfo[i].argc; j++) {
+	    if (strcasecmp(argv[j], commandInfo[i].name[j])) {
+	       err = 1;
+	       break;
+	    }
+	 }
+	 if (!err) return commandInfo[i].f;
+      }
+   }
+   return NULL;
+}
+
+static void reset_databases( void )
+{
+   databasePosition = lst_init_position( DictConfig->dbl );
+}
+
+static dictDatabase *next_database( const char *name )
+{
+   dictDatabase *db = NULL;
+
+   if (!name) return NULL;
+
+   if (*name == '*' || *name == '!') {
+      if (databasePosition) {
+	 do {
+	    db = lst_get_position( databasePosition );
+	    databasePosition = lst_next_position( databasePosition );
+	 } while (db && !db->available);
+      }
+      return db;
+   } else {
+      while (databasePosition) {
+         db = lst_get_position( databasePosition );
+	 databasePosition = lst_next_position( databasePosition );
+         if (db && !strcmp(db->databaseName,name)) {
+	    if (db->available) return db;
+	    else               return NULL;
+	 }
+      }
+      return NULL;
+   }
+}
+
+static int count_databases( void )
+{
+   int count = 0;
+   
+   reset_databases();
+   while (next_database("*")) ++count;
+   return count;
+}
+
+static int daemon_check_list( const char *user, lst_List acl )
+{
+   lst_Position p;
+   dictAccess   *a;
+   char         regbuf[256];
+   char         erbuf[100];
+   int          err;
+   const char   *s;
+   char         *d;
+   regex_t      re;
+
+   if (!acl) return DICT_ALLOW;
+   for (p = lst_init_position(acl); p; p = lst_next_position(p)) {
+      a = lst_get_position(p);
+      switch (a->type) {
+      case DICT_DENY:
+      case DICT_ALLOW:
+      case DICT_AUTHONLY:
+	 for (d = regbuf, s = a->spec; s && *s; ++s) {
+	    switch (*s) {
+	    case '*': *d++ = '.';  *d++ = '*'; break;
+	    case '.': *d++ = '\\'; *d++ = '.'; break;
+	    case '?': *d++ = '.';              break;
+	    default:  *d++ = *s;               break;
+	    }
+	 }
+	 *d = '\0';
+	 if ((err = regcomp(&re, regbuf, REG_ICASE|REG_NOSUB))) {
+	    regerror(err, &re, erbuf, sizeof(erbuf));
+	    log_info( ":E: regcomp(%s): %s\n", regbuf, erbuf );
+	    return DICT_DENY;	/* Err on the side of safety */
+	 }
+	 if (!regexec(&re, daemonHostname, 0, NULL, 0)
+	     || !regexec(&re, daemonIP, 0, NULL, 0)) {
+	    PRINTF(DBG_AUTH,
+		   ("Match %s with %s/%s\n",
+		    a->spec,daemonHostname,daemonIP));
+	    regfree(&re);
+	    return a->type;
+	 }
+	 regfree(&re);
+	 PRINTF(DBG_AUTH,
+		("No match (%s with %s/%s)\n",
+		 a->spec,daemonHostname,daemonIP));
+	 break;
+      case DICT_USER:
+	 if (!strcmp(user,a->spec)) return DICT_ALLOW;
+      case DICT_GROUP:		/* Groups are not yet implemented. */
+	 break;
+      }
+   }
+   return DICT_DENY;
+}
+
+static int daemon_check_auth( const char *user )
+{
+   lst_Position p;
+   lst_List     dbl = DictConfig->dbl;
+   dictDatabase *db;
+   
+   switch (daemon_check_list( user, DictConfig->acl )) {
+   default:
+   case DICT_DENY:
+      return 1;
+   case DICT_AUTHONLY:
+      if (!user) return 0;
+   case DICT_ALLOW:
+      for (p = lst_init_position(dbl); p; p = lst_next_position(p)) {
+	 db = lst_get_position(p);
+	 switch (daemon_check_list(user, db->acl)) {
+	 case DICT_ALLOW: db->available = 1; continue;
+	 default:         db->available = 0; continue;
+	 }
+      }
+      break;
+   }
+   return 0;
+}
+
+static void daemon_log( int type, const char *format, ... )
+{
+   va_list ap;
+   char    buf[8*1024];
+   char    *buf2;
+   int     len;
+   char    *s, *d;
+   int     c;
+   char    marker = '?';
+
+   switch (type) {
+   case DICT_LOG_TERM:
+      if (!flg_test(LOG_STATS))    return; marker = 'I'; break;
+   case DICT_LOG_TRACE:
+      if (!flg_test(LOG_SERVER))   return; marker = 'I'; break;
+   case DICT_LOG_CLIENT:
+      if (!flg_test(LOG_CLIENT))   return; marker = 'C'; break;
+   case DICT_LOG_DEFINE:
+      if (!flg_test(LOG_FOUND))    return; marker = 'D'; break;
+   case DICT_LOG_MATCH:
+      if (!flg_test(LOG_FOUND))    return; marker = 'M'; break;
+   case DICT_LOG_NOMATCH:
+      if (!flg_test(LOG_NOTFOUND)) return; marker = 'N'; break;
+   case DICT_LOG_COMMAND:
+      if (!flg_test(LOG_COMMAND))  return; marker = 'T'; break;
+   }
+
+   if (dbg_test(DBG_PORT))
+      sprintf( buf, ":%c: %s:%d ", marker, daemonHostname, daemonPort );
+   else if (flg_test(LOG_HOST))
+      sprintf( buf, ":%c: %s ", marker, daemonHostname );
+   else
+      sprintf( buf, ":%c: ", marker );
+      
+   len = strlen( buf );
+   
+   va_start( ap, format );
+   vsprintf( buf+len, format, ap );
+   va_end( ap );
+   len = strlen( buf );
+
+   if (len > 2048) {
+      log_info( ":E: buffer overflow (%d)\n", len );
+      buf[2048] = '\0';
+      len = strlen(buf);
+   }
+
+   buf2 = alloca( 3*(len+3) );
+
+   for (s = buf, d = buf2; *s; s++) {
+      c = (unsigned char)*s;
+      if (c == '\t')      *d++ = ' ';
+      else if (c == '\n') *d++ = c;
+      else {
+	 if (c > 128)       { *d++ = 'M'; *d++ = '-';    c -= 128; }
+	 if (c < 32)        { *d++ = '^'; *d++ = c + 64;           }
+	 else if (c == 127) { *d++ = '^'; *d++ = '?';              }
+	 else                 *d++ = c;
+      }
+   }
+   *d = '\0';
+   log_info( "%s", buf2 );
+
+   if (d != buf2) d[-1] = '\0';	/* kill newline */
+   dict_setproctitle( "dictd %s", buf2 );
+}
+
+void daemon_terminate( int sig, const char *name )
+{
+   alarm(0);
+   tim_stop( "t" );
+   close(daemonS);
+   if (name) {
+      daemon_log( DICT_LOG_TERM,
+		  "%s: d/m/c = %d/%d/%d; %sr %su %ss\n",
+                  name,
+                  _dict_defines,
+                  _dict_matches,
+                  _dict_comparisons,
+                  dict_format_time( tim_get_real( "t" ) ),
+                  dict_format_time( tim_get_user( "t" ) ),
+                  dict_format_time( tim_get_system( "t" ) ) );
+   } else {
+      daemon_log( DICT_LOG_TERM,
+		  "signal %d: d/m/c = %d/%d/%d; %sr %su %ss\n",
+                  sig,
+                  _dict_defines,
+                  _dict_matches,
+                  _dict_comparisons,
+                  dict_format_time( tim_get_real( "t" ) ),
+                  dict_format_time( tim_get_user( "t" ) ),
+                  dict_format_time( tim_get_system( "t" ) ) );
+   }
+   
+   longjmp(env,1);
+   if (sig) exit(sig+128);
+   exit(0);
+}
+
+
+static void daemon_write( const char *buf, int len )
+{
+   int left = len;
+   int count;
+   
+   while (left) {
+      if ((count = write(daemonS, buf, left)) != left) {
+	 if (count <= 0) {
+	    if (errno == EPIPE) {
+	       daemon_terminate( 0, "pipe" );
+	    }
+#if HAVE_STRERROR
+            log_info( ":E: writing %d of %d bytes:"
+                      " retval = %d, errno = %d (%s)\n",
+                      left, len, count, errno, strerror(errno) );
+#else
+            log_info( ":E: writing %d of %d bytes:"
+                      " retval = %d, errno = %d\n",
+                      left, len, count, errno );
+#endif
+            daemon_terminate( 0, __FUNCTION__ );
+         }
+      }
+      left -= count;
+   }
+}
+
+static void daemon_crlf( char *d, const char *s, int dot )
+{
+   int first = 1;
+   
+   while (*s) {
+      if (*s == '\n') {
+	 *d++ = '\r';
+	 *d++ = '\n';
+	 first = 1;
+	 ++s;
+      } else {
+	 if (dot && first && *s == '.' && s[1] == '\n')
+	    *d++ = '.'; /* double first dot on line */
+	 first = 0;
+	 *d++ = *s++;
+      }
+   }
+   if (dot) {                   /* add final . */
+      *d++ = '.';
+      *d++ = '\r';
+      *d++ = '\n';
+   }
+   *d = '\0';
+}
+
+static void daemon_printf( const char *format, ... )
+{
+   va_list ap;
+   char    buf[BUFFERSIZE];
+   char    *pt;
+   int     len;
+
+   va_start( ap, format );
+   vsprintf( buf, format, ap );
+   va_end( ap );
+   if ((len = strlen( buf )) >= BUFFERSIZE) {
+      log_info( ":E: buffer overflow: %d\n", len );
+      daemon_terminate( 0, __FUNCTION__ );
+   }
+
+   pt = alloca(2*len);
+   daemon_crlf(pt, buf, 0);
+   daemon_write(pt, strlen(pt));
+}
+
+static void daemon_mime( void )
+{
+   if (daemonMime) daemon_write( "\r\n", 2 );
+}
+
+static void daemon_text( const char *text )
+{
+   char *pt = alloca( 2*strlen(text) + 10 );
+
+   daemon_crlf(pt, text, 1);
+   daemon_write(pt, strlen(pt));
+}
+
+static int daemon_read( char *buf, int count )
+{
+   return net_read( daemonS, buf, count );
+}
+
+static void daemon_ok( int code, const char *string, const char *timer )
+{
+   static int lastDefines     = 0;
+   static int lastMatches     = 0;
+   static int lastComparisons = 0;
+
+   if (code == CODE_STATUS) {
+      lastDefines     = 0;
+      lastMatches     = 0;
+      lastComparisons = 0;
+   }
+
+   if (!timer) {
+      daemon_printf("%d %s\n", code, string);
+   } else {
+      tim_stop( timer );
+      daemon_printf("%d %s [d/m/c = %d/%d/%d; %sr %su %ss]\n",
+                    code,
+                    string,
+                    _dict_defines - lastDefines,
+                    _dict_matches - lastMatches,
+                    _dict_comparisons - lastComparisons,
+                    dict_format_time( tim_get_real( timer ) ),
+                    dict_format_time( tim_get_user( timer ) ),
+                    dict_format_time( tim_get_system( timer ) ) );
+   }
+
+   lastDefines     = _dict_defines;
+   lastMatches     = _dict_matches;
+   lastComparisons = _dict_comparisons;
+}
+
+static int daemon_count_defs( lst_List list )
+{
+   lst_Position  p;
+   dictWord      *dw;
+   unsigned long previousStart = 0;
+   unsigned long previousEnd   = 0;
+   int           count         = 0;
+
+   LST_ITERATE(list,p,dw) {
+      if (previousStart == dw->start && previousEnd == dw->end) continue;
+      previousStart = dw->start;
+      previousEnd   = dw->end;
+      ++count;
+   }
+   return count;
+}
+
+static void daemon_dump_defs( lst_List list )
+{
+   lst_Position  p;
+   char          *buf;
+   dictWord      *dw;
+   dictDatabase  *db;
+   unsigned long previousStart = 0;
+   unsigned long previousEnd   = 0;
+
+   LST_ITERATE(list,p,dw) {
+      db = dw->database;
+
+      if (previousStart == dw->start && previousEnd == dw->end) continue;
+      previousStart = dw->start;
+      previousEnd   = dw->end;
+      buf = dict_data_read( db->data, dw->start, dw->end,
+			    db->prefilter, db->postfilter );
+
+      daemon_printf( "%d \"%s\" %s \"%s\"\n",
+		     CODE_DEFINITION_FOLLOWS,
+		     dw->word,
+		     db->databaseName,
+		     db->databaseShort );
+      daemon_mime();
+      daemon_text(buf);
+      xfree( buf );
+   }
+}
+
+static int daemon_count_matches( lst_List list )
+{
+   lst_Position p;
+   dictWord     *dw;
+   const char   *prevword = NULL;
+   dictDatabase *prevdb   = NULL;
+   int          count     = 0;
+   
+   LST_ITERATE(list,p,dw) {
+      if (prevdb == dw->database && prevword && !strcmp(prevword,dw->word))
+	  continue;
+      prevword = dw->word;
+      prevdb   = dw->database;
+      ++count;
+   }
+   return count;
+}
+
+static void daemon_dump_matches( lst_List list )
+{
+   lst_Position p;
+   dictWord     *dw;
+   const char   *prevword = NULL;
+   dictDatabase *prevdb   = NULL;
+   
+   daemon_mime();
+   LST_ITERATE(list,p,dw) {
+      if (prevdb == dw->database && prevword && !strcmp(prevword,dw->word))
+	  continue;
+      prevword = dw->word;
+      prevdb   = dw->database;
+      daemon_printf( "%s \"%s\"\n", dw->database->databaseName, dw->word );
+   }
+   daemon_printf( ".\n" );
+}
+
+static void daemon_banner( void )
+{
+   time_t         t;
+
+   time(&t);
+
+   sprintf( daemonStamp, "<%d.%d.%lu@%s>", 
+	    _dict_forks,
+	    getpid(),
+	    (long unsigned)t,
+	    net_hostname() );
+   daemon_printf( "%d %s %s <auth.mime> %s\n",
+		  CODE_HELLO,
+                  net_hostname(),
+		  dict_get_banner(0),
+		  daemonStamp );
+}
+
+static void daemon_define( const char *cmdline, int argc, char **argv )
+{
+   lst_List       list = lst_create();
+   dictDatabase   *db;
+   int            matches = 0;
+   char           *word;
+   const char     *databaseName;
+   int            none = 1;
+   int            extension = (argv[0][0] == 'd' && argv[0][1] == '\0');
+
+   if (extension) {
+      switch (argc) {
+      case 2:  databaseName = "*";     word = argv[1]; break;
+      case 3:  databaseName = argv[1]; word = argv[2]; break;
+      default:
+	 daemon_printf( "%d syntax error, illegal parameters\n",
+			CODE_ILLEGAL_PARAM );
+	 return;
+      }
+   } else if (argc == 3) {
+      databaseName = argv[1];
+      word = argv[2];
+   } else {
+      daemon_printf( "%d syntax error, illegal parameters\n",
+		     CODE_ILLEGAL_PARAM );
+      return;
+   }
+
+   reset_databases();
+   while ((db = next_database(databaseName))) {
+      none = 0;
+      matches += dict_search_database( list, word, db, DICT_EXACT );
+      if (matches > 0 && *databaseName != '*')               break; 
+      else if (*databaseName == '*' || *databaseName == '!') continue;
+      goto nomatch;
+   }
+
+   if (matches) {
+      int actual_matches = daemon_count_defs( list );
+      
+      _dict_defines += actual_matches;
+      daemon_log( DICT_LOG_DEFINE,
+		  "%s \"%s\" %d\n", databaseName, word, actual_matches);
+      daemon_printf( "%d %d definitions retrieved\n",
+		     CODE_DEFINITIONS_FOUND,
+		     actual_matches );
+      daemon_dump_defs( list );
+      daemon_ok( CODE_OK, "ok", "c" );
+      dict_destroy_list( list );
+      return;
+   }
+   
+   if (none) {
+      daemon_printf( "%d invalid database, use SHOW DB for list\n",
+		     CODE_INVALID_DB );
+      return;
+   }
+   
+ nomatch:
+   dict_destroy_list( list );
+   daemon_log( DICT_LOG_NOMATCH,
+	       "%s exact \"%s\"\n", databaseName, word );
+   daemon_ok( CODE_NO_MATCH, "no match", "c" );
+}
+
+static void daemon_match( const char *cmdline, int argc, char **argv )
+{
+   lst_List       list = lst_create();
+   dictDatabase   *db;
+   int            matches = 0;
+   char           *word;
+   const char     *databaseName;
+   const char     *strategy;
+   int            strategyNumber;
+   int            none = 1;
+   int            extension = (argv[0][0] == 'm' && argv[0][1] == '\0');
+
+   if (extension) {
+      switch (argc) {
+      case 2:databaseName = "*";     strategy = ".";     word = argv[1]; break;
+      case 3:databaseName = "*";     strategy = argv[1]; word = argv[2]; break;
+      case 4:databaseName = argv[1]; strategy = argv[2]; word = argv[3]; break;
+      default:
+      daemon_printf( "%d syntax error, illegal parameters\n",
+		     CODE_ILLEGAL_PARAM );
+      return;
+      }
+   } else if (argc == 4) {
+      databaseName = argv[1];
+      strategy = argv[2];
+      word = argv[3];
+   } else {
+      daemon_printf( "%d syntax error, illegal parameters\n",
+		     CODE_ILLEGAL_PARAM );
+      return;
+   }
+
+   if ((strategyNumber = lookup_strategy(strategy)) < 0) {
+      daemon_printf( "%d invalid strategy, use SHOW STRAT for a list\n",
+		     CODE_INVALID_STRATEGY );
+      return;
+   }
+
+   reset_databases();
+   while ((db = next_database(databaseName))) {
+      none = 0;
+      matches += dict_search_database( list, word, db, strategyNumber );
+      if (matches > 0 && *databaseName != '*')               break;
+      else if (*databaseName == '*' || *databaseName == '!') continue;
+      goto nomatch;
+   }
+
+   if (matches) {
+      int actual_matches = daemon_count_matches( list );
+      
+      _dict_matches += actual_matches;
+      daemon_log( DICT_LOG_MATCH,
+		  "%s %s \"%s\" %d\n",
+		  databaseName, strategy, word, actual_matches);
+      daemon_printf( "%d %d matches found\n",
+		     CODE_MATCHES_FOUND, actual_matches );
+      daemon_dump_matches( list );
+      daemon_ok( CODE_OK, "ok", "c" );
+      dict_destroy_list( list );
+      return;
+   }
+   
+   if (none) {
+      daemon_printf( "%d invalid database, use SHOW DB for list\n",
+		     CODE_INVALID_DB );
+      return;
+   }
+
+ nomatch:
+   daemon_log( DICT_LOG_NOMATCH,
+	       "%s %s \"%s\"\n", databaseName, strategy, word );
+   daemon_ok( CODE_NO_MATCH, "no match", "c" );
+}
+
+static void daemon_show_db( const char *cmdline, int argc, char **argv )
+{
+   int          count;
+   dictDatabase *db;
+   
+   if (argc != 2) {
+      daemon_printf( "%d syntax error, illegal parameters\n",
+		     CODE_ILLEGAL_PARAM );
+      return;
+   }
+
+   if (!(count = count_databases())) {
+      daemon_printf( "%d no databases present\n", CODE_NO_DATABASES );
+   } else {
+      daemon_printf( "%d %d databases present\n",
+		     CODE_DATABASE_LIST, count );
+      reset_databases();
+      daemon_mime();
+      while ((db = next_database("*"))) {
+	 daemon_printf( "%s \"%s\"\n",
+			db->databaseName, db->databaseShort );
+      }
+      daemon_printf( ".\n" );
+      daemon_ok( CODE_OK, "ok", NULL );
+   }
+}
+
+static void daemon_show_strat( const char *cmdline, int argc, char **argv )
+{
+   int i;
+   
+   if (argc != 2) {
+      daemon_printf( "%d syntax error, illegal parameters\n",
+		     CODE_ILLEGAL_PARAM );
+      return;
+   }
+
+   if (!STRATEGIES) {
+      daemon_printf( "%d no strategies available\n", CODE_NO_STRATEGIES );
+   } else {
+      daemon_printf( "%d %d databases present\n",
+		     CODE_STRATEGY_LIST, STRATEGIES );
+      daemon_mime();
+      for (i = 0; i < STRATEGIES; i++) {
+	 daemon_printf( "%s \"%s\"\n",
+			strategyInfo[i].name, strategyInfo[i].description );
+      }
+      daemon_printf( ".\n" );
+      daemon_ok( CODE_OK, "ok", NULL );
+   }
+}
+
+static void daemon_show_info( const char *cmdline, int argc, char **argv )
+{
+   char         *buf;
+   dictWord     *dw;
+   dictDatabase *db;
+   lst_List     list;
+   
+   if (argc != 3) {
+      daemon_printf( "%d syntax error, illegal parameters\n",
+		     CODE_ILLEGAL_PARAM );
+      return;
+   }
+
+   if ((argv[2][0] == '*' || argv[2][0] == '!') && argv[2][1] == '\0') {
+      daemon_printf( "%d invalid database, use SHOW DB for list\n",
+		     CODE_INVALID_DB );
+      return;
+   }
+
+   list = lst_create();
+   reset_databases();
+   while ((db = next_database( argv[2] ))) {
+      if (dict_search_database( list,
+				db->databaseInfoPointer ?
+				db->databaseInfoPointer :
+				DICT_INFO_ENTRY_NAME,
+				db,
+				DICT_EXACT )) {
+	 dw = lst_nth_get( list, 1 );
+	 buf = dict_data_read( db->data, dw->start, dw->end,
+			       db->prefilter, db->postfilter );
+	 dict_destroy_list( list );
+	 daemon_printf( "%d information for %s\n",
+			CODE_DATABASE_INFO, argv[2] );
+	 daemon_mime();
+	 daemon_text(buf);
+	 daemon_ok( CODE_OK, "ok", NULL );
+	 return;
+      } else {
+	 dict_destroy_list( list );
+	 daemon_printf( "%d information for %s\n",
+			CODE_DATABASE_INFO, argv[2] );
+	 daemon_mime();
+	 daemon_text( "No information available\n" );
+	 daemon_ok( CODE_OK, "ok", NULL );
+	 return;
+      }
+   }
+
+   dict_destroy_list( list );
+   daemon_printf( "%d invalid database, use SHOW DB for list\n",
+		  CODE_INVALID_DB );
+}
+
+static void daemon_show_server( const char *cmdline, int argc, char **argv )
+{
+   FILE          *str;
+   char          buffer[1024];
+   dictDatabase  *db;
+   double        uptime;
+   
+   tim_stop("dictd");
+   uptime = tim_get_real("dictd");
+   
+   daemon_printf( "%d server information\n", CODE_SERVER_INFO );
+   daemon_mime();
+   daemon_printf( "%s\n", dict_get_banner(0) );
+   
+   daemon_printf( "On %s: up %s, %d fork%s (%0.1f/hour)\n",
+		  net_hostname(),
+		  dict_format_time( uptime ),
+		  _dict_forks,
+		  _dict_forks > 1 ? "s" : "",
+		  (_dict_forks/uptime)*3600.0 );
+   if (count_databases()) {
+      daemon_printf( "\nDatabase      Headwords         Index"
+		     "          Data  Uncompressed\n" );
+      reset_databases();
+      while ((db = next_database("*"))) {
+	 daemon_printf( "%-12.12s %10lu %10lu %cB %10lu %cB %10lu %cB\n",
+			db->databaseName,
+			db->index->headwords,
+			
+			db->index->size/1024 > 10240 ?
+			db->index->size/1024/1024 : db->index->size/1024,
+			db->index->size/1024 > 10240 ? 'M' : 'k',
+
+			db->data->size/1024 > 10240 ?
+			db->data->size/1024/1024 : db->data->size/1024,
+			db->data->size/1024 > 10240 ? 'M' : 'k',
+
+			db->data->length/1024 > 10240 ?
+			db->data->length/1024/1024 : db->data->length/1024,
+			db->data->length/1024 > 10240 ? 'M' : 'k' );
+      }
+   }
+   if (DictConfig->site && (str = fopen( DictConfig->site, "r" ))) {
+      daemon_printf( "\nSite-specific information for %s:\n\n",
+		     net_hostname() );
+      while ((fgets( buffer, 1000, str ))) daemon_printf( "%s", buffer );
+      fclose( str );
+   }
+   daemon_printf( ".\n" );
+   daemon_ok( CODE_OK, "ok", NULL );
+}
+
+static void daemon_show( const char *cmdline, int argc, char **argv )
+{
+   daemon_printf( "%d syntax error, illegal parameters\n",
+		  CODE_ILLEGAL_PARAM );
+}
+
+static void daemon_option_mime( const char *cmdline, int argc, char **argv )
+{
+   ++daemonMime;
+   daemon_ok( CODE_OK, "ok - using MIME headers", NULL );
+}
+
+static void daemon_option( const char *cmdline, int argc, char **argv )
+{
+   daemon_printf( "%d syntax error, illegal parameters\n",
+		  CODE_ILLEGAL_PARAM );
+}
+
+static void daemon_client( const char *cmdline, int argc, char **argv )
+{
+   const char *pt = strchr( cmdline, ' ' );
+   
+   if (pt)
+      daemon_log( DICT_LOG_CLIENT, "%.200s\n", pt + 1 );
+   else
+      daemon_log( DICT_LOG_CLIENT, "%.200s\n", cmdline );
+   daemon_ok( CODE_OK, "ok", NULL );
+}
+
+static void daemon_auth( const char *cmdline, int argc, char **argv )
+{
+   char              *buf;
+   hsh_HashTable     h = DictConfig->usl;
+   const char        *secret;
+   struct MD5Context ctx;
+   unsigned char     digest[16];
+   char              hex[33];
+   int               i;
+   
+   if (argc != 3)
+      daemon_printf( "%d syntax error, illegal parameters\n",
+		     CODE_ILLEGAL_PARAM );
+   if (!h || !(secret = hsh_retrieve(h, argv[1]))) {
+      daemon_printf( "%d auth denied\n", CODE_AUTH_DENIED );
+      return;
+   }
+   
+   buf = alloca(strlen(daemonStamp) + strlen(secret) + 10);
+   sprintf( buf, "%s%s", daemonStamp, secret );
+
+   MD5Init(&ctx);
+   MD5Update(&ctx, buf, strlen(buf));
+   MD5Final(digest, &ctx);
+
+   for (i = 0; i < 16; i++) sprintf( hex+2*i, "%02x", digest[i] );
+   hex[32] = '\0';
+
+   PRINTF(DBG_AUTH,("Got %s expected %s\n", argv[2], hex ));
+
+   if (strcmp(hex,argv[2])) {
+      daemon_printf( "%d auth denied\n", CODE_AUTH_DENIED );
+   } else {
+      daemon_printf( "%d authenticated\n", CODE_AUTH_OK );
+      daemon_check_auth( argv[1] );
+   }
+}
+
+static void daemon_status( const char *cmdline, int argc, char **argv )
+{
+   daemon_ok( CODE_STATUS, "status", "t" );
+}
+
+static void daemon_help( const char *cmdline, int argc, char **argv )
+{
+   daemon_printf( "%d help text follows\n", CODE_HELP );
+   daemon_mime();
+   daemon_text(
+    "DEFINE database word         -- look up word in database\n"
+    "MATCH database strategy word -- match word in database using strategy\n"
+    "SHOW DB                      -- list all accessible databases\n"
+    "SHOW DATABASES               -- list all accessible databases\n"
+    "SHOW STRAT                   -- list available matching strategies\n"
+    "SHOW STRATEGIES              -- list available matching strategies\n"
+    "SHOW INFO database           -- provide information about the database\n"
+    "SHOW SERVER                  -- provide site-specific information\n"
+    "OPTION MIME                  -- use MIME headers\n"
+    "CLIENT info                  -- identify client to server\n"
+    "AUTH user string             -- provide authentication information\n"
+    "STATUS                       -- display timing information\n"
+    "HELP                         -- display this help information\n"
+    "QUIT                         -- terminate connection\n\n"
+    "The following commands are unofficial server extensions for debugging\n"
+    "only.  You may find them useful if you are using telnet as a client.\n"
+    "If you are writing a client, you MUST NOT use these commands, since\n"
+    "they won't be supported on any other server!\n\n"
+    "D word                       -- DEFINE * word\n"
+    "D database word              -- DEFINE database word\n"
+    "M word                       -- MATCH * . word\n"
+    "M strategy word              -- MATCH * strategy word\n"
+    "M database strategy word     -- MATCH database strategy word\n"
+    "S                            -- STATUS\n"
+    "H                            -- HELP\n"
+    "Q                            -- QUIT\n"
+   );
+   daemon_ok( CODE_OK, "ok", NULL );
+}
+
+static void daemon_quit( const char *cmdline, int argc, char **argv )
+{
+   daemon_ok( CODE_GOODBYE, "bye", "t" );
+   daemon_terminate( 0, "quit" );
+}
+
+int dict_daemon( int s, struct sockaddr_in *csin, char ***argv0, int delay,
+		 int error )
+{
+   char           buf[4096];
+   int            count;
+   struct hostent *h;
+   arg_List       cmdline;
+   int            argc;
+   char           **argv;
+   void           (*command)(const char *, int, char **);
+      
+   if (setjmp(env)) return 0;
+   
+   daemonPort = ntohs(csin->sin_port);
+   daemonIP   = str_find( inet_ntoa(csin->sin_addr) );
+   if ((h = gethostbyaddr((void *)&csin->sin_addr,
+			  sizeof(csin->sin_addr), csin->sin_family))) {
+      daemonHostname = str_find( h->h_name );
+   } else
+      daemonHostname = daemonIP;
+
+   daemonS           = s;
+   
+   _dict_defines     = 0;
+   _dict_matches     = 0;
+   _dict_comparisons = 0;
+
+   tim_start( "t" );
+   daemon_log( DICT_LOG_TRACE, "connected\n" );
+   dict_setproctitle( "dictd: %s connected", daemonHostname );
+
+   if (error) {
+      daemon_printf( "%d temporarily unavailable\n",
+		     CODE_TEMPORARILY_UNAVAILABLE );
+      daemon_terminate( 0, "temporarily unavailable" );
+   }
+
+   if (daemon_check_auth( NULL )) {
+      daemon_printf( "%d access denied\n", CODE_ACCESS_DENIED );
+      daemon_terminate( 0, "access denied" );
+   }
+	      
+   daemon_banner();
+
+   alarm(delay);
+   while ((count = daemon_read( buf, 4000 )) >= 0) {
+      alarm(0);
+      tim_start( "c" );
+      if (!count) {
+#if 0
+         daemon_ok( CODE_OK, "ok", "c" );
+#endif
+	 continue;
+      }
+
+      daemon_log( DICT_LOG_COMMAND, "%.80s\n", buf );
+      cmdline = arg_argify(buf,0);
+      arg_get_vector( cmdline, &argc, &argv );
+      if ((command = lookup_command(argc,argv))) {
+	 command(buf, argc, argv);
+      } else {
+	 daemon_printf( "%d unknown command\n", CODE_SYNTAX_ERROR );
+      }
+      arg_destroy(cmdline);
+      alarm(delay);
+   }
+#if 0
+   printf( "%d %d\n", count, errno );
+#endif
+   daemon_terminate( 0, "close" );
+   return 0;
+}
