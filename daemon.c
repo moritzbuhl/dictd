@@ -17,7 +17,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: daemon.c,v 1.79 2004/11/17 12:39:42 cheusov Exp $
+ * $Id: daemon.c,v 1.82 2005/04/01 11:21:23 cheusov Exp $
  * 
  */
 
@@ -41,6 +41,7 @@ static const char   *daemonIP        = NULL;
 static int          daemonPort       = -1;
 static char         daemonStamp[256] = "";
 static jmp_buf      env;
+
 static int          daemonMime;
 
 static void daemon_define( const char *cmdline, int argc, const char **argv );
@@ -495,6 +496,17 @@ static void daemon_mime( void )
    if (daemonMime) daemon_write( "\r\n", 2 );
 }
 
+static void daemon_mime_definition (const dictDatabase *db)
+{
+   if (daemonMime){
+      if (db -> mime_header){
+	 daemon_printf ("%s", db -> mime_header);
+      }
+
+      daemon_write ("\r\n", 2);
+   }
+}
+
 static void daemon_text( const char *text, int dot )
 {
    char *pt = alloca( 2*strlen(text) + 10 );
@@ -572,7 +584,8 @@ static void daemon_dump_defs( lst_List list )
    lst_Position  p;
    char          *buf;
    dictWord      *dw;
-   const dictDatabase  *db;
+   const dictDatabase  *db         = NULL;
+   const dictDatabase  *db_visible = NULL;
    unsigned long previousStart = 0;
    unsigned long previousEnd   = 0;
    const char *  previousDef   = NULL;
@@ -596,17 +609,19 @@ static void daemon_dump_defs( lst_List list )
       buf = dict_data_obtain ( db, dw );
 
       if (dw -> database_visible){
-	 db = dw -> database_visible;
+	 db_visible = dw -> database_visible;
+      }else{
+	 db_visible = db;
       }
 
       daemon_printf (
 	  "%d \"%s\" %s \"%s\"\n",
 	  CODE_DEFINITION_FOLLOWS,
 	  dw->word,
-	  db->invisible ? "*" : db->databaseName,
-	  db->invisible ? ""  : db->databaseShort);
+	  db_visible -> invisible ? "*" : db_visible -> databaseName,
+	  db_visible -> invisible ? ""  : db_visible -> databaseShort);
 
-      daemon_mime();
+      daemon_mime_definition (db);
 
       if (db->filter){
 	 count = strlen(buf);
@@ -938,6 +953,7 @@ static int dict_search_words (
       if (word){
 	 matches_count = dict_search (
 	    l, word, db, strategy,
+	    daemonMime,
 	    result, extra_result, extra_result_size);
 
 	 if (*result == DICT_PLUGIN_RESULT_PREPROCESS){
@@ -1005,7 +1021,8 @@ int dict_search_databases (
       matches_count = dict_search_words (
 	 l,
 	 preprocessed_words, db, strategy,
-	 &error, &result, &extra_result, &extra_result_size);
+	 &error,
+	 &result, &extra_result, &extra_result_size);
 
       if (matches < 0)
 	 matches = 0;
@@ -1155,8 +1172,7 @@ void daemon_show_info(
       if (dict_search (
 	 list,
 	 info_entry_name,
-	 db,
-	 DICT_STRAT_EXACT,
+	 db, DICT_STRAT_EXACT, 0,
 	 NULL, NULL, NULL))
       {
 	 int i=1;

@@ -16,7 +16,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: defs.h,v 1.9 2004/11/19 19:42:00 cheusov Exp $
+ * $Id: defs.h,v 1.11 2005/03/29 17:55:50 cheusov Exp $
  */
 
 #ifndef _DEFS_H_
@@ -51,6 +51,7 @@
 #define DICT_FLAG_VIRTUAL        DICT_ENTRY_PREFIX"-virtual"
 #define DICT_FLAG_ALPHABET       DICT_ENTRY_PREFIX"-alphabet"
 #define DICT_FLAG_DEFAULT_STRAT  DICT_ENTRY_PREFIX"-default-strategy"
+#define DICT_FLAG_MIME_HEADER    DICT_ENTRY_PREFIX"-mime-header"
 
 #define DICT_ENTRY_PLUGIN        DICT_ENTRY_PREFIX"-plugin"
 #define DICT_ENTRY_PLUGIN_DATA   DICT_ENTRY_PREFIX"-plugin-data"
@@ -209,8 +210,11 @@ typedef struct dictDatabase {
    int virtual_db;   /* non-zero for virtual databases */
    int plugin_db;    /* non-zero for plugin entry */
    int normal_db;    /* non-zero for normal database */
+   int mime_db;      /* non-zero for MIME database */
 
    int default_strategy;    /* default search strategy for `.' */
+
+   const char *mime_header; /* MIME header for OPTION MIME command */
 
    /* database_virtual members */
    const char *database_list;  /* comma-separated list of database names */
@@ -220,6 +224,12 @@ typedef struct dictDatabase {
    const char *plugin_data;    /* data for initializing plugin */
    dictPlugin *plugin;
 
+   /* database_mime members */
+   const char *mime_mimeDbname;
+   const char *mime_nomimeDbname;
+
+   struct dictDatabase *mime_mimeDB;
+   struct dictDatabase *mime_nomimeDB;
 } dictDatabase;
 
 #define DICT_DENY     0

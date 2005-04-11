@@ -1,3 +1,135 @@
+2005-04-12  Aleksey Cheusov  <vle at gmx.net}
+
+  * configure.in, NEWS:
+  NEWS update (1.10.0 release)
+  version: 1.9.15 ---> 1.10.0
+
+  * example.conf:
+  added: section containing global option
+
+  * example_mime.conf:
+  added: Yet another example demonstrating `database_mime' keyword
+
+  * configure.in, dictP.h:
+  fixed: compilation bugs on OpenBSD-3.4 which doesn't provide
+      CODESET macro in <langinfo.h>
+
+  * NEWS: nothing
+
+  * dict.1, dictfmt.1:
+  Documentation update
+
+2005-04-09  Aleksey Cheusov  <vle at gmx.net}
+
+  * plugin.c, servparse.y:
+  fixed: `default_strategy' keyword is not implemented
+      for `database_plugin' section
+
+2005-04-01  Aleksey Cheusov  <vle at gmx.net}
+
+  * daemon.c:
+  fixed: database_mime + invisible
+
+  * dictfmt.c:
+  fix
+
+2005-03-31  Aleksey Cheusov  <vle at gmx.net}
+
+  * INSTALL:
+  minor changes
+
+  * dictd.8:
+  Documentation for `database_mime' section
+
+  * dictfmt.c:
+  The special headword 00-database-mime-header is never wrapped
+
+  * example_plugin_dbi.conf:
+  better explanation
+
+2005-03-30  Aleksey Cheusov  <vle at gmx.net}
+
+  * index.c:
+  indentation
+
+  * servparse.y:
+  nothing
+
+  * dict.c:
+  added: -M option to `dict' for sending OPTION MIME command to DICT server
+
+2005-03-29  Aleksey Cheusov  <vle at gmx.net}
+
+  * dictunformat, servparse.y, dictfmt.c, defs.h, dictd.c, daemon.c:
+  dictfmt, dictd:
+     added new option --mime-header to `dictfmt'.  If
+     applied, `dictfmt' creates the special headword
+     00-database-mime-header, `dictd' read it while initializing the
+     database and prepend definitions with it (if OPTION MIME command was
+     sent by client). Ability to set the MIME header for the database is
+     useful in combination with `database_mime' keyword in dictd.conf,
+     See dictd.8 for more information.
+  `dictunformat' skips 00-database-mime-header headword
+
+  * index.c: nothing
+
+  * defs.h, dictd.c, index.c, index.h, servparse.y, servscan.l, daemon.c:
+  added: database_mime, dbname_nomime and dbname_mime keywords
+      in dictd configuration file
+
+      Example:
+
+         database cool_db___nomime  {...}
+         database cool_db___mime  {...}
+
+         # The following section adds new database cool_db
+         # When client acceses it and DOES send OPTION MIME command
+         # to dictd it actually accesses the database `cool_db___mime'
+         # otherwise (no MIME OPTION command was set)
+         # the database `cool_db___nomime' is used.
+         # This allows server to provide databases with support
+         # of both plain text and formatted definitions
+         # with appropriate MIME header (roff, html etc...)
+         database_mime cool_db {
+            dbname_mime   "cool_db___mime"
+            dbname_nomime "cool_db___nomime"
+         }
+
+2005-03-28  Aleksey Cheusov  <vle at gmx.net}
+
+  * NEWS, dictd.8, dictd.c, dictd.h, servparse.y, servscan.l:
+  ADDED: Global Setting section in dictd.conf
+      Now configuration files can include all required option
+      (command line option are no required anymore)
+
+      dictd.conf may look like this
+
+        global {
+           port             2628
+           delay            600
+           depth            10
+           limit            100
+           timestamp        0
+
+           log_option       "found"
+           log_option       "notfound"
+           log_option       "stats"
+           log_option       "client"
+
+           debug_option     "init"
+           locale           ru_RU.UTF-8
+
+           add_strategy     "phonetic" "Phonetic search"
+           add_strategy     "reverse"  "Full text search in definitions"
+
+        #   listen_to        127.0.0.1
+        #   syslog
+        #   syslog_facility daemon
+           log_file         "/var/log/dictd.log"
+        #   fast_start
+        #   without_mmap
+        }
+
 2004-12-23  Aleksey Cheusov  <vle at gmx.net}
 
   * NEWS: updates in NEWS
