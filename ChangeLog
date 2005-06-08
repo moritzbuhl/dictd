@@ -1,3 +1,60 @@
+2005-06-09  Aleksey Cheusov  <vle at gmx.net}
+
+  * NEWS: NEWS file update
+
+  * NEWS, configure.in:
+  news updated
+  version --> 1.10.1
+
+2005-06-08  Aleksey Cheusov  <vle at gmx.net}
+
+  * dictfmt.c:
+  minor fix
+
+  * libmaa/decl.h:
+  fixed: compilation bug on smarc64/xxxBSD.
+      Thanks to micha137 for bu report and patch.
+
+2005-05-28  Aleksey Cheusov  <vle at gmx.net}
+
+  * index.c:
+  By default 'dictd' is run in UTF-8 mode unless you ./configure it
+     with --with-system-utf8-funcs option
+
+  * dictfmt.c:
+  added: --utf8 option. Use it to create utf-8 dictionaries.
+      Use of '--locale ru_RU.UTF-8' is deprecated unless you
+      ./configure dict packages with --with-system-utf8-funcs
+
+  * dictP.h:
+  MB_CUR_MAX__: 7 --> 6
+
+  * dict.1:
+  fixed: typo. Thanks to A Costa for reporting the bug report.
+
+2005-04-14  Aleksey Cheusov  <vle at gmx.net}
+
+  * dictd.8, dictd.c, dictd.h, servparse.y, servscan.l:
+  By default dictd, when running as daemon, writes a PID
+      to /var/run/dictd.pid file. This can be overriden by
+      'pid_file' keyword in dictd.conf (See dictd.8) of command line
+      option '--pid-file'
+
+      Thanks to Josef Novak for sudgestion and patch.
+
+2005-04-13  Aleksey Cheusov  <vle at gmx.net}
+
+  * dictd.8:
+  fixed: dictd.8 says that 'lev' strategy doesn't work
+      with utf-8 dictionaries, but it does since release 1.9.13
+
+  * configure.in, dictP.h, dictd.c, dictfmt.c, index.c, lev.h, mbrlen.c, mbrtowc.c, mbstowcs.c, mbtowc.c, str.c, wcrtomb.c, wctomb.c:
+  unless 'dictd' is configured using './configure --with-system-utf8-funcs'
+      'dictd' and 'dictfmt' use built-in UTF-8/UCS functions, i.e.
+      there is no need for --locale xx_YY.UTF-8. As a result
+      'dictd' can be compiled and run on platforms
+      which doesn't have UTF-8 locale.
+
 2005-04-12  Aleksey Cheusov  <vle at gmx.net}
 
   * configure.in, NEWS:

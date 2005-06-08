@@ -17,7 +17,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: dictfmt.c,v 1.57 2005/04/01 11:20:52 cheusov Exp $
+ * $Id: dictfmt.c,v 1.60 2005/06/08 18:35:45 cheusov Exp $
  *
  * Sun Jul 5 18:48:33 1998: added patches for Gutenberg's '1995 CIA World
  * Factbook' from David Frey <david@eos.lugs.ch>.
@@ -63,6 +63,7 @@
 static int  Debug;
 static FILE *str;
 
+/* defaults to creating ASCII database */
 static int utf8_mode     = 0;
 static int bit8_mode     = 0;
 
@@ -92,7 +93,7 @@ static int ignore_hw_shortname = 0;
 static int ignore_hw_info      = 0;
 static int ignore_hw_def_strat = 0;
 
-static const char *locale      = "C";
+static const char *locale      = NULL;
 static const char *default_strategy = NULL;
 static const char *mime_header = NULL;
 
@@ -111,7 +112,7 @@ static int mbswidth_ (const char *s)
    memset (&ps, 0, sizeof (ps));
 
    while (*s){
-      len = mbrtowc (&wchar, s, MB_CUR_MAX, &ps);
+      len = mbrtowc__ (&wchar, s, MB_CUR_MAX__, &ps);
 
       switch (len){
       case (size_t) (-1):
@@ -119,7 +120,7 @@ static int mbswidth_ (const char *s)
 	 return -1;
 
       default:
-	 width = wcwidth (wchar);
+	 width = wcwidth__ (wchar);
 	 if (-1 == width)
 	    width = 1; /* we also count non-printable characters */
 
@@ -314,7 +315,7 @@ static int stranagram_utf8 (char *s)
    memset (&ps,  0, sizeof (ps));
 
    for (p = s; *p; ){
-      len = mbrlen (p, MB_CUR_MAX, &ps);
+      len = mbrlen__ (p, MB_CUR_MAX__, &ps);
       if ((int) len < 0)
 	 return 0; /* not a UTF-8 string */
 
@@ -352,7 +353,7 @@ static char *trim_right (char *s)
 	 abort ();
 
       do {
-	 len = mbtowc (&mbc, s, MB_CUR_MAX);
+	 len = mbtowc__ (&mbc, s, MB_CUR_MAX__);
 	 assert (len >= 0);
 
 	 if (len == 0 || !iswspace (mbc))
@@ -389,7 +390,7 @@ static char *trim_left (char *s)
    }else{
 #ifdef HAVE_UTF8
       do {
-	 len = mbtowc (&mbc, s, MB_CUR_MAX);
+	 len = mbtowc__ (&mbc, s, MB_CUR_MAX__);
 	 assert (len >= 0);
 
 	 if (len == 0 || !iswspace (mbc))
@@ -475,7 +476,7 @@ static void update_alphabet (const char *word)
    memset (&ps, 0, sizeof (ps));
 
    while (*p){
-      len = mbrlen (p, MB_CUR_MAX, &ps);
+      len = utf8_mode ? mbrlen__ (p, MB_CUR_MAX__, &ps) : 1;
       assert ((int) len >= 0);
 
       old_char = p [len];
@@ -555,7 +556,7 @@ static void fmt_newheadword( const char *word )
 
    fmt_ignore_headword = 0;
 
-   if (locale [0] == 'C' && locale [1] == 0){
+   if (!bit8_mode && !utf8_mode){
       if (contain_nonascii_symbol (word)){
 	 fprintf (stderr, "\n8-bit head word \"%s\"is encountered while \"C\" locale is used\n", word);
 	 destroy_and_exit (1);
@@ -684,6 +685,7 @@ static void help( FILE *out_stream )
      "--version\n\
 -V        display version information",
      "-D        debug",
+"--utf8    for creating utf-8 dictionary",
 "--quiet\n\
 --silent\n\
 -q        quiet operation",
@@ -721,14 +723,14 @@ static void help( FILE *out_stream )
    while (*p) fprintf( out_stream, "%s\n", *p++ );
 }
 
-static void set_utf8bit_mode (const char *loc)
+static void set_utf8bit_mode (const char *locale_)
 {
    const char *charset = NULL;
    int ascii_mode;
 
-   if (!setlocale(LC_COLLATE, loc) || !setlocale(LC_CTYPE, loc)){
-      fprintf (stderr, "invalid locale '%s'\n", locale);
-      exit (2);
+   if (!setlocale(LC_COLLATE, locale_) || !setlocale(LC_CTYPE, locale_)){
+      fprintf (stderr, "invalid locale '%s'\n", locale_);
+      destroy_and_exit (2);
    }
 
    charset = nl_langinfo (CODESET);
@@ -746,9 +748,16 @@ static void set_utf8bit_mode (const char *loc)
    ascii_mode = 
       !strcmp (charset, "ANSI_X3.4-1968") ||
       !strcmp (charset, "US-ASCII") ||
-      (locale [0] == 'C' && locale [1] == 0);
+      (locale_ [0] == 'C' && locale_ [1] == 0);
 
    bit8_mode = !ascii_mode && !utf8_mode;
+
+#ifndef SYSTEM_UTF8_FUNCS
+   if (utf8_mode){
+      fprintf (stderr, "Using --locale xx_YY.UTF-8 for creating utf-8 database is deprecated,\n\
+use --utf-8 option instead.\n");
+   }
+#endif
 }
 
 static const char string_unknown [] = "unknown";
@@ -971,6 +980,7 @@ int main( int argc, char **argv )
       { "license",              0, 0, 'L' },
       { "default-strategy",     1, 0, 512 },
       { "mime-header",          1, 0, 513 },
+      { "utf8",                 0, 0, 514 },
    };
 
    init (argv[0]);
@@ -1036,6 +1046,10 @@ int main( int argc, char **argv )
       case 513:
 	 mime_header = str_copy (optarg);
 	 break;
+      case 514:
+	 bit8_mode = 0;
+	 utf8_mode = 1;
+	 break;
       case 't':
 	 without_info = 1;
 	 without_hw   = 1;
@@ -1055,18 +1069,13 @@ int main( int argc, char **argv )
       destroy_and_exit (1);
    }
 
-   set_utf8bit_mode (locale);
+   if (locale)
+      set_utf8bit_mode (locale);
 
    if (bit8_mode || utf8_mode)
       setenv("LC_ALL", "C", 1); /* this is for 'sort' subprocess */
    else
       setenv("LC_ALL", locale, 1); /* this is for 'sort' subprocess */
-
-   if (!setlocale(LC_ALL, locale)){
-      fprintf (stderr, "invalid locale '%s'\n", locale);
-
-      destroy_and_exit (2);
-   }
 
    if (
       -1 == snprintf (
