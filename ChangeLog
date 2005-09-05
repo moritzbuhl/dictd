@@ -1,3 +1,134 @@
+2005-09-06  Aleksey Cheusov  <vle at gmx.net}
+
+  * NEWS: updated
+
+  * NEWS: release time
+
+  * NEWS, configure.in, dictd.8:
+  documentation updated
+  version: 1.10.1 --> 1.10.2
+
+  * dictd.8:
+  added: short description for a list of special headwords in .index file
+
+  * NEWS: updates for 1.10.2
+
+  * dictfmt.1:
+  added: documentation for --utf8 option
+
+  * NEWS: updated for 1.10.2
+
+2005-09-05  Aleksey Cheusov  <vle at gmx.net}
+
+  * dictP.h, libmaa/maaP.h:
+  fixed: compiler warnings on FreeBSD5
+
+  * NEWS: *** empty log message ***
+
+2005-09-02  Aleksey Cheusov  <vle at gmx.net}
+
+  * dictfmt.c, str.c:
+  fixes for FreeBSD-4
+
+2005-08-26  Aleksey Cheusov  <vle at gmx.net}
+
+  * colorit.in:
+  new command implemented: gensub
+
+2005-08-25  Aleksey Cheusov  <vle at gmx.net}
+
+  * Makefile.in:
+  fixes in 'distclean' target
+
+  * test/dictd_test:
+  minor changes
+
+  * dictfmt.c, test/db.expect.smiley_1.index:
+  FIXED: dictfmt MUST produce the same output on all platforms.
+     - -k 1,3 is used instead of -k 1,1, so all columns are used in sorting.
+     - LC_ALL environment variable is ALWAYS set to C for 'sort' utility,
+       otherwise sorting order depends on locale (LANG and LC_xxx variables).
+
+2005-08-18  Aleksey Cheusov  <vle at gmx.net}
+
+  * test/db.expect.hello_1.dict, test/db.expect.hello_1.index, test/db.expect.hello_2.dict, test/db.expect.hello_2.index, test/db.expect.hello_3.dict, test/db.expect.hello_3.index, test/db.expect.hello_4.dict, test/db.expect.hello_4.index, test/db.expect.hello_5.dict, test/db.expect.hello_5.index, test/dictd_test, test/testdb.hello.txt:
+  added: new tests for dictfmt
+
+2005-08-17  Aleksey Cheusov  <vle at gmx.net}
+
+  * test/db.expect.smiley_1.dict, test/db.expect.smiley_1.index, test/db.expect.smiley_2.dict, test/db.expect.smiley_2.index, test/db.expect.smiley_3.dict, test/db.expect.smiley_3.index, test/db.expect.smiley_4.index, test/db.expect.smiley_5.dict, test/db.expect.smiley_5.index, test/dictd_test, test/testdb.smiley.txt, Makefile.in:
+  more tests
+  fixes, code-clean-ups
+
+  * test/db.expect.dict, test/db.expect.index, test/db.expect.smiley_1.dict, test/db.expect.smiley_1.index, test/db.expect.smiley_2.dict, test/db.expect.smiley_2.index, test/db.expect.smiley_3.dict, test/db.expect.smiley_3.index, test/db.expect.smiley_4.dict, test/db.expect.smiley_4.index, test/dictd_test, test/testdb.c5.txt, test/testdb.e.txt, test/testdb.f.txt, test/testdb.h.txt, test/testdb.h.txt.dict, test/testdb.h.txt.index, test/testdb.j.txt, test/testdb.p.txt, test/testdb.smiley.txt:
+  added: files for automatic testing, and testing script itself
+
+2005-08-15  Aleksey Cheusov  <vle at gmx.net}
+
+  * NEWS, dictfmt.1:
+  minor fixes
+
+2005-08-14  Aleksey Cheusov  <vle at gmx.net}
+
+  * index.c:
+  printf(...) --> PRINTF (DBG_SEARCH, (...))
+
+  * dictfmt.c:
+  fixed: 'dictfmt --allchars' run 'sort' utility with no C locale, while
+      dictd requires this type of sorting.
+      Affected versions: all dictfmt version providing --allchars option.
+      It is strongly recommended to recreate dictionary
+      which was built with --allchars option.
+
+2005-08-13  Aleksey Cheusov  <vle at gmx.net}
+
+  * dictfmt.c:
+  added: -i option
+
+2005-07-26  Aleksey Cheusov  <vle at gmx.net}
+
+  * daemon.c:
+  FIXED: 'SHOW DB' command shows the special entry '--exit--'
+      as a normal database which cannot be used used for searching.
+      This contradicts rfc-2229.
+
+      Use 'SHOW SERVER' command to see where the default search stops.
+
+  * dictfmt.c:
+  FIXED: all these years dictfmt worked incorrectly
+      because not only index part of .index was used in the sorting.
+      A a result .index file could look like
+
+        gawk:sample programs   CXyl    ON
+        gawk:scalar constants  +sR     RS
+        gawk:scanning an array BfKx    k7
+    !   gawk   Se      I3e
+        gawk:simple sed        Cpm/    xZ
+        gawk:single character fields   pQy     So
+        gawk:special caveats   7nN     Z2
+
+    Pay attention to the line preceded by !.
+    It leads to the word 'gawk' was never found.
+
+    Now the external utility 'sort' is run with additional options:
+      -t <TAB> -k 1,1
+
+    Affected versions of dictfmt: 1.6.1 - 1.10.1
+
+2005-07-20  Aleksey Cheusov  <vle at gmx.net}
+
+  * dictfmt.c:
+  fixed: typo in error message
+
+2005-07-17  Aleksey Cheusov  <vle at gmx.net}
+
+  * index.c:
+  fixed: sometimes the regexp strategy may incorrectly
+      because of optimization code and strange binary search.
+
+      Thanks to Slava Kravchenko for bug report.
+      Affected version: 1.4.9 - 1.10.1
+
 2005-06-09  Aleksey Cheusov  <vle at gmx.net}
 
   * NEWS: NEWS file update

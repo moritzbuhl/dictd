@@ -17,7 +17,7 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 675 Mass Ave, Cambridge, MA 02139, USA.
 # 
-# $Id: Makefile.in,v 1.103 2004/12/13 19:12:55 cheusov Exp $
+# $Id: Makefile.in,v 1.105 2005/08/25 18:43:03 cheusov Exp $
 #
 
 # Add a _letter_ if you change the version number and release your own version.
@@ -435,6 +435,7 @@ clean:
 	-rm -f *.dct *.idx y.output TAGS
 	-rm -f *.dict *.index
 	-rm -f *.exe *.dll
+	-rm -f test/_* test/testdb.t.txt
 
 recursive-clean: clean
 	@for subdir in `echo $(subdirs)`; do \
@@ -456,8 +457,8 @@ distclean: recursive-clean
 	done; \
 	rm -f regex/regex.h; \
 	rm -f config.h config.cache config.status stamp-h.in stamp-h; \
-	rm -f Makefile doc/Makefile dictdplugin-config include_regex.h
-	rm -f local_* colorit dictl
+	rm -f Makefile doc/Makefile dictdplugin-config include_regex.h; \
+	rm -f local_* colorit dictl; \
 	rm -rf autom4te.cache libmaa/autom4te.cache
 
 cvsclean: distclean
@@ -471,6 +472,10 @@ deps:
       gcc -MM $$i 2>/dev/null; \
    done | awk '{gsub(/ \/[^ ]+/, ""); print}' | \
    sed 's,\(.*[.]\)o,\1o \1os,1' > deps
+
+.PHONY: test
+test: $(EXES) $(LIBRARIES)
+	@cd $(srcdir)/test && sh ./dictd_test
 
 # The following is based on the "Automatic Remaking" node in the GNU
 # Autoconf documentation:
@@ -493,4 +498,3 @@ Makefile: Makefile.in config.status
 
 config.status: configure
 	./config.status --recheck
-
