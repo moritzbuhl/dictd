@@ -17,7 +17,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: dictd.c,v 1.125 2005/11/20 18:50:33 cheusov Exp $
+ * $Id: dictd.c,v 1.127 2005/12/12 18:39:41 cheusov Exp $
  * 
  */
 
@@ -1121,7 +1121,7 @@ const char *dict_get_banner( int shortFlag )
 {
    static char    *shortBuffer = NULL;
    static char    *longBuffer = NULL;
-   const char     *id = "$Id: dictd.c,v 1.125 2005/11/20 18:50:33 cheusov Exp $";
+   const char     *id = "$Id: dictd.c,v 1.127 2005/12/12 18:39:41 cheusov Exp $";
    struct utsname uts;
    
    if (shortFlag && shortBuffer) return shortBuffer;
@@ -1401,6 +1401,15 @@ static void set_locale_and_flags (const char *loc)
    bit8_mode = !ascii_mode && !utf8_mode;
 }
 
+static void set_umask (void)
+{
+#if defined(__OPENNT) || defined(__INTERIX)
+   umask(002);		/* set safe umask */
+#else
+   umask(022);		/* set safe umask */
+#endif
+}
+
 static void init (const char *fn)
 {
    maa_init (fn);
@@ -1572,15 +1581,15 @@ static void create_pid_file ()
    FILE *fd = fopen (pidFile, "w");
 
    if (!fd){
-      log_info(":E: cannot open pif file '%s'\n:E:    err msg: %s\n",
+      log_info(":E: cannot open pid file '%s'\n:E:    err msg: %s\n",
 	       pidFile, strerror (errno));
       err_fatal(__FUNCTION__,
 		":E: terminating due to errors. See log file\n");
    }
 
-   fprintf (fd, "%lu", (unsigned long) getpid ());
+   fprintf (fd, "%lu\n", (unsigned long) getpid ());
    if (fclose (fd)){
-      log_info(":E: cannot write to pif file '%s'\n:E:    err msg: %s\n",
+      log_info(":E: cannot write to pid file '%s'\n:E:    err msg: %s\n",
 	       pidFile, strerror (errno));
       err_fatal(__FUNCTION__,
 		":E: terminating due to errors. See log file\n");
@@ -1651,6 +1660,7 @@ int main (int argc, char **argv, char **envp)
       { 0,                  0, 0, 0  }
    };
 
+   set_umask ();
    init (argv[0]);
 
    flg_register( LOG_SERVER,    "server" );

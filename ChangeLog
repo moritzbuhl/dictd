@@ -1,3 +1,17 @@
+2005-12-12  Aleksey Cheusov  <vle at gmx.net}
+
+  * NEWS:
+  new notes
+
+  * NEWS:
+  typo fixed
+
+  * NEWS, configure.in, dictd.c, net.c:
+  FIX: pid file was created with 0666 permissions
+
+  * dictd.c:
+  minor fixes by Kirk Hilliard
+
 2005-12-08  Aleksey Cheusov  <vle at gmx.net}
 
   * NEWS:
