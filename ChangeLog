@@ -1,4 +1,52 @@
-2005-12-12  Aleksey Cheusov  <vle at gmx.net}
+2006-05-26  cheusov  <vle@gmx.net>
+
+  * Makefile.in: make --> $(MAKE)
+
+  * NEWS, configure.in: version --> 1.10.5
+
+2006-05-19  cheusov  <vle@gmx.net>
+
+  * daemon3.c: new #includes added
+
+2006-05-13  cheusov  <vle@gmx.net>
+
+  * daemon.c:
+  FIXED: In case database_exit directive is used in dictd.conf
+     SHOW DB command returns incorrect number of databases available.
+     Afected versions: 1.10.2 -- 1.10.4
+
+2006-05-06  cheusov  <vle@gmx.net>
+
+  * configure.in, daemon3.c, dictP.h, dictd.c, net.c:
+  When available, system-wide daemon(3) function
+      is used for becoming a daemon.
+
+2006-04-15  cheusov  <vle@gmx.net>
+
+  * dictd.c:
+  In dictd-1.9.14 dictd creates log file being root and than releases
+     root priviledges. This was bad idea because log file may have % sign
+     and may be used as a pattern for log files.
+
+     Now older behaviour is restored, i.e.
+     log file is created after releasing root priviledges.
+     If you want to create log file under /var/log directory, create
+     /var/log/dictd with appropriate permissions and create log files there.
+
+     I apologize for inconvenience and breaking backward compatibility.
+
+  * NEWS: typo fixed
+
+2006-04-09  cheusov  <vle@gmx.net>
+
+  * libmaa/maaP.h, dictP.h: removed obsolete code
+
+2006-04-08  cheusov  <vle@gmx.net>
+
+  * libmaa/Makefile.in, libmaa/decl.h, libmaa/maaP.h, libmaa/memtest.c, decl.h, deps, dictP.h, dictunformat:
+  decl.h files seem obsolete to me. They cause problrems, do not help.
+
+2005-12-12  cheusov  <vle@gmx.net>
 
   * NEWS:
   new notes
@@ -12,7 +60,7 @@
   * dictd.c:
   minor fixes by Kirk Hilliard
 
-2005-12-08  Aleksey Cheusov  <vle at gmx.net}
+2005-12-08  cheusov  <vle@gmx.net>
 
   * NEWS:
   Notes about regex/ and zlib/
@@ -29,7 +77,7 @@
   * config.guess, config.sub:
   updated
 
-2005-12-06  Aleksey Cheusov  <vle at gmx.net}
+2005-12-06  cheusov  <vle@gmx.net>
 
   * examples/dictd_complex.conf:
   fixes for m4 shipped with *BSD and Solaris that expands "index" to -1
@@ -37,7 +85,7 @@
 
   * examples/dictd4.conf, examples/dictd_virtual.conf: minor fixes
 
-2005-12-05  Aleksey Cheusov  <vle at gmx.net}
+2005-12-05  cheusov  <vle@gmx.net>
 
   * dict.c:
   fixed: compilation bugs (conformance to ANSI C)
@@ -45,7 +93,7 @@
   * dictP.h, libmaa/maaP.h:
   fixed: compilation bugs because of alloca
 
-2005-12-03  Aleksey Cheusov  <vle at gmx.net}
+2005-12-03  cheusov  <vle@gmx.net>
 
   * dictd.8.in, example.conf, example.dictrc, example.site, example2.conf, example3.conf, example_complex.conf, example_mime.conf, example_plugin_dbi.conf, example_popen.conf, example_virtual.conf, examples/dictd4.conf:
   Example files have been moved to examples/ directory
@@ -76,7 +124,7 @@
      dict -M -D
      dict -M <query>
 
-2005-11-30  Aleksey Cheusov  <vle at gmx.net}
+2005-11-30  cheusov  <vle@gmx.net>
 
   * colorit.1, colorit.1.in, configure.in, dict.1, dict.1.in, dictfmt.1, dictfmt.1.in, dictfmt_index2suffix.1, dictfmt_index2suffix.1.in, dictfmt_index2word.1, dictfmt_index2word.1.in, dictl.1, dictl.1.in, dictunformat.1, dictunformat.1.in, dictzip.1, dictzip.1.in:
   renamed:
@@ -88,7 +136,7 @@
 
   * NEWS, dictd.8: minor fixes
 
-2005-11-21  Aleksey Cheusov  <vle at gmx.net}
+2005-11-21  cheusov  <vle@gmx.net>
 
   * libmaa/log.c:
   FIXED: buffer overflow (segfault) in log_{error,info} functions.
@@ -100,7 +148,7 @@
       - -L
       This is due to too long 00-database-alphabet "definition"
 
-2005-11-20  Aleksey Cheusov  <vle at gmx.net}
+2005-11-20  cheusov  <vle@gmx.net>
 
   * libmaa/log.c:
   fixed: strange segfault in log_info function under Interix 3.5
@@ -112,13 +160,13 @@
 
   * example.conf: fixed: missing space
 
-2005-11-19  Aleksey Cheusov  <vle at gmx.net}
+2005-11-19  cheusov  <vle@gmx.net>
 
   * dictd.8, index.c, index.h, strategy.c, strategy.h:
   ADDED: `nprefix' search strategy. See dictd.8 for more information.
       No plugin support yet.
 
-2005-11-15  Aleksey Cheusov  <vle at gmx.net}
+2005-11-15  cheusov  <vle@gmx.net>
 
   * test/testdb.hello_1.conf, test/testdb.hello_2.conf, test/testdb.hello_3.conf, test/testdb.hello_4.conf, test/testdb.hello_5.conf, test/testdb.smiley_1.conf, test/testdb.smiley_2.conf, test/testdb.smiley_3.conf, test/testdb.smiley_4.conf, test/testdb.smiley_5.conf:
   fixed: Some m4 shipped with Solaris/MacOS-/... translate index to -1
@@ -126,13 +174,13 @@
 
   * test/dictd_test: fix for Solaris-9: $PWD ===> `pwd`
 
-2005-11-13  Aleksey Cheusov  <vle at gmx.net}
+2005-11-13  cheusov  <vle@gmx.net>
 
   * dictP.h: fixed: defining __FUNCTION__
 
   * dictd.8: minor fix
 
-2005-10-30  Aleksey Cheusov  <vle at gmx.net}
+2005-10-30  cheusov  <vle@gmx.net>
 
   * test/dictd_smiley_2_res.expected.txt, test/dictd_smiley_3_res.expected.txt, test/dictd_smiley_4_res.expected.txt, test/dictd_smiley_5_res.expected.txt, test/dictd_hello_1_res.expected.txt, test/dictd_hello_2_res.expected.txt, test/dictd_hello_3_res.expected.txt, test/dictd_hello_4_res.expected.txt, test/dictd_hello_5_res.expected.txt, test/dictd_smiley_1_res.expected.txt, test/dictd_test, test/testdb.hello_1.conf, test/testdb.hello_2.conf, test/testdb.hello_3.conf, test/testdb.hello_4.conf, test/testdb.hello_5.conf, test/testdb.smiley_1.conf, test/testdb.smiley_2.conf, test/testdb.smiley_3.conf, test/testdb.smiley_4.conf, test/testdb.smiley_5.conf:
   lots of new tests for 'dictd'
@@ -140,7 +188,7 @@
 
   * daemon.c: fixes for inetd (daemonS_out ---> 1)
 
-2005-10-15  Aleksey Cheusov  <vle at gmx.net}
+2005-10-15  cheusov  <vle@gmx.net>
 
   * dict.c:
   minor fixes with pager, patches by Kirk Hilliard
@@ -153,11 +201,11 @@
 
   * test/dictd_test: minor fixes in printf
 
-2005-09-22  Aleksey Cheusov  <vle at gmx.net}
+2005-09-22  cheusov  <vle@gmx.net>
 
   * libmaa/Makefile.in: -fPIC is always enabled for libmaa
 
-2005-09-21  Aleksey Cheusov  <vle at gmx.net}
+2005-09-21  cheusov  <vle@gmx.net>
 
   * libmaa/maaP.h: fixed: compilation bug (alloca)
 
@@ -168,7 +216,7 @@
 
   'setenv' function implementation (Solaris is affected)
 
-2005-09-06  Aleksey Cheusov  <vle at gmx.net}
+2005-09-06  cheusov  <vle@gmx.net>
 
   * NEWS: updated
 
@@ -188,24 +236,24 @@
 
   * NEWS: updated for 1.10.2
 
-2005-09-05  Aleksey Cheusov  <vle at gmx.net}
+2005-09-05  cheusov  <vle@gmx.net>
 
   * dictP.h, libmaa/maaP.h:
   fixed: compiler warnings on FreeBSD5
 
   * NEWS: *** empty log message ***
 
-2005-09-02  Aleksey Cheusov  <vle at gmx.net}
+2005-09-02  cheusov  <vle@gmx.net>
 
   * dictfmt.c, str.c:
   fixes for FreeBSD-4
 
-2005-08-26  Aleksey Cheusov  <vle at gmx.net}
+2005-08-26  cheusov  <vle@gmx.net>
 
   * colorit.in:
   new command implemented: gensub
 
-2005-08-25  Aleksey Cheusov  <vle at gmx.net}
+2005-08-25  cheusov  <vle@gmx.net>
 
   * Makefile.in:
   fixes in 'distclean' target
@@ -219,12 +267,12 @@
      - LC_ALL environment variable is ALWAYS set to C for 'sort' utility,
        otherwise sorting order depends on locale (LANG and LC_xxx variables).
 
-2005-08-18  Aleksey Cheusov  <vle at gmx.net}
+2005-08-18  cheusov  <vle@gmx.net>
 
   * test/db.expect.hello_1.dict, test/db.expect.hello_1.index, test/db.expect.hello_2.dict, test/db.expect.hello_2.index, test/db.expect.hello_3.dict, test/db.expect.hello_3.index, test/db.expect.hello_4.dict, test/db.expect.hello_4.index, test/db.expect.hello_5.dict, test/db.expect.hello_5.index, test/dictd_test, test/testdb.hello.txt:
   added: new tests for dictfmt
 
-2005-08-17  Aleksey Cheusov  <vle at gmx.net}
+2005-08-17  cheusov  <vle@gmx.net>
 
   * test/db.expect.smiley_1.dict, test/db.expect.smiley_1.index, test/db.expect.smiley_2.dict, test/db.expect.smiley_2.index, test/db.expect.smiley_3.dict, test/db.expect.smiley_3.index, test/db.expect.smiley_4.index, test/db.expect.smiley_5.dict, test/db.expect.smiley_5.index, test/dictd_test, test/testdb.smiley.txt, Makefile.in:
   more tests
@@ -233,12 +281,12 @@
   * test/db.expect.dict, test/db.expect.index, test/db.expect.smiley_1.dict, test/db.expect.smiley_1.index, test/db.expect.smiley_2.dict, test/db.expect.smiley_2.index, test/db.expect.smiley_3.dict, test/db.expect.smiley_3.index, test/db.expect.smiley_4.dict, test/db.expect.smiley_4.index, test/dictd_test, test/testdb.c5.txt, test/testdb.e.txt, test/testdb.f.txt, test/testdb.h.txt, test/testdb.h.txt.dict, test/testdb.h.txt.index, test/testdb.j.txt, test/testdb.p.txt, test/testdb.smiley.txt:
   added: files for automatic testing, and testing script itself
 
-2005-08-15  Aleksey Cheusov  <vle at gmx.net}
+2005-08-15  cheusov  <vle@gmx.net>
 
   * NEWS, dictfmt.1:
   minor fixes
 
-2005-08-14  Aleksey Cheusov  <vle at gmx.net}
+2005-08-14  cheusov  <vle@gmx.net>
 
   * index.c:
   printf(...) --> PRINTF (DBG_SEARCH, (...))
@@ -250,12 +298,12 @@
       It is strongly recommended to recreate dictionary
       which was built with --allchars option.
 
-2005-08-13  Aleksey Cheusov  <vle at gmx.net}
+2005-08-13  cheusov  <vle@gmx.net>
 
   * dictfmt.c:
   added: -i option
 
-2005-07-26  Aleksey Cheusov  <vle at gmx.net}
+2005-07-26  cheusov  <vle@gmx.net>
 
   * daemon.c:
   FIXED: 'SHOW DB' command shows the special entry '--exit--'
@@ -285,12 +333,12 @@
 
     Affected versions of dictfmt: 1.6.1 - 1.10.1
 
-2005-07-20  Aleksey Cheusov  <vle at gmx.net}
+2005-07-20  cheusov  <vle@gmx.net>
 
   * dictfmt.c:
   fixed: typo in error message
 
-2005-07-17  Aleksey Cheusov  <vle at gmx.net}
+2005-07-17  cheusov  <vle@gmx.net>
 
   * index.c:
   fixed: sometimes the regexp strategy may incorrectly
@@ -299,7 +347,7 @@
       Thanks to Slava Kravchenko for bug report.
       Affected version: 1.4.9 - 1.10.1
 
-2005-06-09  Aleksey Cheusov  <vle at gmx.net}
+2005-06-09  cheusov  <vle@gmx.net>
 
   * NEWS: NEWS file update
 
@@ -307,7 +355,7 @@
   news updated
   version --> 1.10.1
 
-2005-06-08  Aleksey Cheusov  <vle at gmx.net}
+2005-06-08  cheusov  <vle@gmx.net>
 
   * dictfmt.c:
   minor fix
@@ -316,7 +364,7 @@
   fixed: compilation bug on smarc64/xxxBSD.
       Thanks to micha137 for bu report and patch.
 
-2005-05-28  Aleksey Cheusov  <vle at gmx.net}
+2005-05-28  cheusov  <vle@gmx.net>
 
   * index.c:
   By default 'dictd' is run in UTF-8 mode unless you ./configure it
@@ -333,7 +381,7 @@
   * dict.1:
   fixed: typo. Thanks to A Costa for reporting the bug report.
 
-2005-04-14  Aleksey Cheusov  <vle at gmx.net}
+2005-04-14  cheusov  <vle@gmx.net>
 
   * dictd.8, dictd.c, dictd.h, servparse.y, servscan.l:
   By default dictd, when running as daemon, writes a PID
@@ -343,7 +391,7 @@
 
       Thanks to Josef Novak for sudgestion and patch.
 
-2005-04-13  Aleksey Cheusov  <vle at gmx.net}
+2005-04-13  cheusov  <vle@gmx.net>
 
   * dictd.8:
   fixed: dictd.8 says that 'lev' strategy doesn't work
@@ -356,7 +404,7 @@
       'dictd' can be compiled and run on platforms
       which doesn't have UTF-8 locale.
 
-2005-04-12  Aleksey Cheusov  <vle at gmx.net}
+2005-04-12  cheusov  <vle@gmx.net>
 
   * configure.in, NEWS:
   NEWS update (1.10.0 release)
@@ -377,13 +425,13 @@
   * dict.1, dictfmt.1:
   Documentation update
 
-2005-04-09  Aleksey Cheusov  <vle at gmx.net}
+2005-04-09  cheusov  <vle@gmx.net>
 
   * plugin.c, servparse.y:
   fixed: `default_strategy' keyword is not implemented
       for `database_plugin' section
 
-2005-04-01  Aleksey Cheusov  <vle at gmx.net}
+2005-04-01  cheusov  <vle@gmx.net>
 
   * daemon.c:
   fixed: database_mime + invisible
@@ -391,7 +439,7 @@
   * dictfmt.c:
   fix
 
-2005-03-31  Aleksey Cheusov  <vle at gmx.net}
+2005-03-31  cheusov  <vle@gmx.net>
 
   * INSTALL:
   minor changes
@@ -405,7 +453,7 @@
   * example_plugin_dbi.conf:
   better explanation
 
-2005-03-30  Aleksey Cheusov  <vle at gmx.net}
+2005-03-30  cheusov  <vle@gmx.net>
 
   * index.c:
   indentation
@@ -416,7 +464,7 @@
   * dict.c:
   added: -M option to `dict' for sending OPTION MIME command to DICT server
 
-2005-03-29  Aleksey Cheusov  <vle at gmx.net}
+2005-03-29  cheusov  <vle@gmx.net>
 
   * dictunformat, servparse.y, dictfmt.c, defs.h, dictd.c, daemon.c:
   dictfmt, dictd:
@@ -453,7 +501,7 @@
             dbname_nomime "cool_db___nomime"
          }
 
-2005-03-28  Aleksey Cheusov  <vle at gmx.net}
+2005-03-28  cheusov  <vle@gmx.net>
 
   * NEWS, dictd.8, dictd.c, dictd.h, servparse.y, servscan.l:
   ADDED: Global Setting section in dictd.conf
@@ -488,7 +536,7 @@
         #   without_mmap
         }
 
-2004-12-23  Aleksey Cheusov  <vle at gmx.net}
+2004-12-23  cheusov  <vle@gmx.net>
 
   * NEWS: updates in NEWS
 
@@ -496,16 +544,16 @@
   changes necessary for Solaris which loves old awk
   1.9.14 --> 1.9.15
 
-2004-12-13  Aleksey Cheusov  <vle at gmx.net}
+2004-12-13  cheusov  <vle@gmx.net>
 
   * Makefile.in: man plugin removed
 
-2004-11-25  Aleksey Cheusov  <vle at gmx.net}
+2004-11-25  cheusov  <vle@gmx.net>
 
   * NEWS:
   added information about 1.9.15 release
 
-2004-11-19  Aleksey Cheusov  <vle at gmx.net}
+2004-11-19  cheusov  <vle@gmx.net>
 
   * dictd.8, dictfmt.c, dictunformat, index.c, defs.h:
   For 8-bit databases (non-ASCII and non-UTF8), `dictfmt' generates
@@ -528,7 +576,7 @@
       This makes `dictd' incompatible
       with 8-bit databases built using dictfmt older than 1.9.15!!!
 
-2004-11-17  Aleksey Cheusov  <vle at gmx.net}
+2004-11-17  cheusov  <vle@gmx.net>
 
   * libmaa/arg.c:
   removed: C++ style comments
@@ -536,7 +584,7 @@
   * libmaa/hash.c, libmaa/sl.c, libmaa/string.c, libmaa/arg.c, lev.h, plugins_common.c, plugins_common.h, strategy.c, strategy.h, dict.c, dictdplugin_judy.c, dictzip.c, index.c, daemon.c:
   fixed: a few warning messages produced by gcc
 
-2004-11-07  Aleksey Cheusov  <vle at gmx.net}
+2004-11-07  cheusov  <vle@gmx.net>
 
   * libmaa/log.c:
   code clean-ups
@@ -544,7 +592,7 @@
   * dictd.c, index.c:
   better logging
 
-2004-10-12  Aleksey Cheusov  <vle at gmx.net}
+2004-10-12  cheusov  <vle@gmx.net>
 
   * Makefile.in, defs.h, dictd.8, dictd.c, index.c, plugin.c, servparse.y, servscan.l:
   ADDED: `default_strategy' key word in configuration file.
@@ -586,7 +634,7 @@
   debugging information switched on using -d option of dictd
       is logged to syslog/file/FILE_stream, but printf'ed to stdout.
 
-2004-10-08  Aleksey Cheusov  <vle at gmx.net}
+2004-10-08  cheusov  <vle@gmx.net>
 
   * index.c:
   fixed: The function `dict_search_bmh' works incorrectly in utf-8 mode
@@ -597,7 +645,7 @@
   * libmaa/Makefile.in:
   ./ --> awk -f
 
-2004-10-06  Aleksey Cheusov  <vle at gmx.net}
+2004-10-06  cheusov  <vle@gmx.net>
 
   * configure.in, dictP.h, dictd.c, iswalnum.c, iswspace.c, towlower.c:
   `_ALL_SOURCE' macros is define on Microsoft Interix in dictP.h file
@@ -629,17 +677,17 @@
     if there is no macro `TIOCNOTTY'.
     As a result net.c can be compiled successfully on Interix
 
-2004-10-05  Aleksey Cheusov  <vle at gmx.net}
+2004-10-05  cheusov  <vle@gmx.net>
 
   * libmaa/xmalloc.c:
   compiler warning message fixed
 
-2004-10-04  Aleksey Cheusov  <vle at gmx.net}
+2004-10-04  cheusov  <vle@gmx.net>
 
   * dictd.c:
   fix: logging is directed to stderr, when -i option applied
 
-2004-09-21  Aleksey Cheusov  <vle at gmx.net}
+2004-09-21  cheusov  <vle@gmx.net>
 
   * dictd.8:
   typos fixed
@@ -647,7 +695,7 @@
   * configure.in:
   nothing serious
 
-2004-07-08  Aleksey Cheusov  <vle at gmx.net}
+2004-07-08  cheusov  <vle@gmx.net>
 
   * dictdplugin_dbi.c:
   'utf8' flag is set TRUE by default
@@ -658,13 +706,13 @@
   * dictunformat, dictunformat.1:
   documentation update
 
-2004-06-15  Aleksey Cheusov  <vle at gmx.net}
+2004-06-15  cheusov  <vle@gmx.net>
 
   * configure.in:
   fixed: because of '-lc -lc' passed to linker executables
       cannot be built on latest cygwin
 
-2004-06-06  Aleksey Cheusov  <vle at gmx.net}
+2004-06-06  cheusov  <vle@gmx.net>
 
   * NEWS: corrections
 
@@ -682,7 +730,7 @@
   * NEWS:
   fixed a typo
 
-2004-05-30  Aleksey Cheusov  <vle at gmx.net}
+2004-05-30  cheusov  <vle@gmx.net>
 
   * libmaa/timer.c:
   a few checks for NULL
@@ -696,7 +744,7 @@
 
   * libmaa/arggram2c: comments changed
 
-2004-05-28  Aleksey Cheusov  <vle at gmx.net}
+2004-05-28  cheusov  <vle@gmx.net>
 
   * mbrlen.c, mbrtowc.c, mbstowcs.c:
   fixed: on systems having no mbrlen(3) function (FreeBSD4),
@@ -704,11 +752,11 @@
       if run with 8-bit --locale option and headword contains
       0xFF or 0xFE symbols (for exsmple, KOI8-R and CP1251 character sets).
 
-2004-05-25  Aleksey Cheusov  <vle at gmx.net}
+2004-05-25  cheusov  <vle@gmx.net>
 
   * dictd.8: dosumentation update
 
-2004-05-24  Aleksey Cheusov  <vle at gmx.net}
+2004-05-24  cheusov  <vle@gmx.net>
 
   * dictfmt.c:
   "The original data was distributed..." message is wrapped to 72 (default)
@@ -726,13 +774,13 @@
   If a connection to DICT server faild, dict exits with exit status 41
   documentation update
 
-2004-05-21  Aleksey Cheusov  <vle at gmx.net}
+2004-05-21  cheusov  <vle@gmx.net>
 
   * dictd.8, dictd.c, net.c, net.h:
   dictd: added --listen-to option for binding socket to the specified address
   documentation update
 
-2004-05-16  Aleksey Cheusov  <vle at gmx.net}
+2004-05-16  cheusov  <vle@gmx.net>
 
   * libmaa/configure.in, libmaa/log.c:
   Where vsyslog function is determined by autoconf
@@ -753,14 +801,14 @@
   * dictfmt.c:
   -t option implies '--columns 0' to preserve original formatting
 
-2004-05-15  Aleksey Cheusov  <vle at gmx.net}
+2004-05-15  cheusov  <vle@gmx.net>
 
   * daemon.c:
   fixed: SHOW INFO command sends incorrect data to the client if
       the information about database is set using 'info' keyword.
       Affected versions: 1.9.12-1.9.13
 
-2004-05-14  Aleksey Cheusov  <vle at gmx.net}
+2004-05-14  cheusov  <vle@gmx.net>
 
   * libmaa/Makefile.in, libmaa/arg.c, libmaa/arggram.txt, libmaa/arggram2c, libmaa/argtest.c, libmaa/argtest.in, libmaa/argtest.out:
   fixed: arg_argify parses string incorrectly, for example,
@@ -777,7 +825,7 @@
 
   * NEWS: fixed misspell
 
-2004-04-26  Aleksey Cheusov  <vle at gmx.net}
+2004-04-26  cheusov  <vle@gmx.net>
 
   * codes.h:
   added: missing response code
@@ -785,7 +833,7 @@
   * dict.1, dict.c:
   exit status again: fixes, improvements, documentation update
 
-2004-04-23  Aleksey Cheusov  <vle at gmx.net}
+2004-04-23  cheusov  <vle@gmx.net>
 
   * dict.c:
   In case of an error, non-zero exit status returned by 'dict'
@@ -793,7 +841,7 @@
   * daemon.c:
   more information status message printed by dictd
 
-2004-04-05  Aleksey Cheusov  <vle at gmx.net}
+2004-04-05  cheusov  <vle@gmx.net>
 
   * dictd.8, dictd.c:
   SIGUSR1  causes  dictd  to unload databases. Then dictd returns 420 status
@@ -803,7 +851,7 @@
    configuration  file,  first,  send  SIGUSR1  signal  to  dictd  to  unload
    databases, update files, and then send SUGHUP signal to load them again.
 
-2004-03-24  Aleksey Cheusov  <vle at gmx.net}
+2004-03-24  cheusov  <vle@gmx.net>
 
   * example_plugin_dbi.conf: revert --> reverse
 
@@ -818,12 +866,12 @@
   * plugin.c:
   log plugin failure to stderr
 
-2004-03-23  Aleksey Cheusov  <vle at gmx.net}
+2004-03-23  cheusov  <vle@gmx.net>
 
   * dictd.c, dictdplugin_dbi.c:
   fixes for call dictdb_free
 
-2004-03-22  Aleksey Cheusov  <vle at gmx.net}
+2004-03-22  cheusov  <vle@gmx.net>
 
   * index.c:
   fixed: if database has no 00-database-alphabet headword,
@@ -831,7 +879,7 @@
       dictd may work (FreeBSD - affected) incorrectly with LEV strategy.
       Affected versions: 1.9.12
 
-2004-03-21  Aleksey Cheusov  <vle at gmx.net}
+2004-03-21  cheusov  <vle@gmx.net>
 
   * Makefile.in, configure.in, dictdplugin_dbi.c, example_plugin_dbi.conf:
   ADDED: plugin using libdbi library for implementing DICT database using
@@ -866,13 +914,13 @@
     Hack! To resolv DBI driver's symbols, dictd is currently linked with
     libdbi. Later, this will be fixed.
 
-2004-03-19  Aleksey Cheusov  <vle at gmx.net}
+2004-03-19  cheusov  <vle@gmx.net>
 
   * dictd.c, dictdplugin_judy.c, lev.h, plugin.c:
   code clean-ups
   debugging code 'fprintf (stderr' code has been removed
 
-2004-03-18  Aleksey Cheusov  <vle at gmx.net}
+2004-03-18  cheusov  <vle@gmx.net>
 
   * dictdplugin_judy.c, heap.h, plugins_common.c, plugins_common.h:
   functions, common to plugins have been moved to plugins_common.{h,c}
@@ -884,12 +932,12 @@
   maa_shutdown function is not called automatically
       when application terminates. Run it explicitly.
 
-2004-03-11  Aleksey Cheusov  <vle at gmx.net}
+2004-03-11  cheusov  <vle@gmx.net>
 
   * Makefile.in, NEWS, configure.in:
   If lex and yacc are missing, ./configure shows an error message and exits
 
-2004-03-10  Aleksey Cheusov  <vle at gmx.net}
+2004-03-10  cheusov  <vle@gmx.net>
 
   * configure.in, libmaa/configure.in:
   dictd / libmaa version has been changed to 1.9.12 / 0.97
@@ -902,7 +950,7 @@
   * NEWS:
   update to 1.9.12
 
-2004-03-06  Aleksey Cheusov  <vle at gmx.net}
+2004-03-06  cheusov  <vle@gmx.net>
 
   * daemon.c:
   fixed: 'daemon_crlf' works incorrectly
@@ -913,38 +961,38 @@
   fixed: 'daemon_printf' function overflows buffer
       when a printed string is "\n".
 
-2004-02-24  Aleksey Cheusov  <vle at gmx.net}
+2004-02-24  cheusov  <vle@gmx.net>
 
   * nl_langinfo.c, dictP.h, dictd.c, dictfmt.c, configure.in:
   nl_langinfo function is used to detect
       whether dictd/dictfmt uses 8bit, utf-8, or C locale.
 
-2004-02-23  Aleksey Cheusov  <vle at gmx.net}
+2004-02-23  cheusov  <vle@gmx.net>
 
   * dictdplugin_judy.c:
   fixed: if a requested headword has more than one definition,
          DEFINE command always returns the first one
 
-2004-02-07  Aleksey Cheusov  <vle at gmx.net}
+2004-02-07  cheusov  <vle@gmx.net>
 
   * dictl.in:
   fixed: incorrect charset determination.
       Thanks to Roland Rosenfeld for report and patch.
 
-2004-01-28  kirk  <kirk at cheusov}
+2004-01-28  kirk  <kirk@chen.chizhovka.net>
 
   * dictfmt.1, dictfmt.c:
   Added --break-headwords option for use with --headword-separator, so
   each headword is written on its own line of the .dict file.
 
-2004-01-27  Bob Hilliard  <hilliard at debian.org}
+2004-01-27  Bob Hilliard  <hilliard@debian.org>
 
   * dictfmt.1, dictfmt.c:
   Patched dictfmt.c to corrrect formatting of database-info with the -f
   option.
   Corrected typo in dictfmt.1
 
-2004-01-25  Aleksey Cheusov  <vle at gmx.net}
+2004-01-25  cheusov  <vle@gmx.net>
 
   * dictl.in, dictl.1:
   dictl analyses PAGER variable to set a pager.
@@ -952,14 +1000,14 @@
   * dictl.1, dictl.in:
   dictl checks whether recode/iconv/konwert/locale commands are available
 
-2004-01-24  Bob Hilliard  <hilliard at debian.org}
+2004-01-24  Bob Hilliard  <hilliard@debian.org>
 
   * dictl.in, dictl.1:
   Modified dictl script to test for the presence of /usr/bin/recode,
   and default to using iconv if recode is not present.
   Update dictl.1 to mention this.
 
-2004-01-16  Aleksey Cheusov  <vle at gmx.net}
+2004-01-16  cheusov  <vle@gmx.net>
 
   * deps, dictdplugin.h, dictdplugin_judy.c, index.c, index.h, plugin.c:
   dictdplugin_judy implements the correct LEV search strategy
@@ -967,19 +1015,19 @@
   Global 8-bit and ASCII alphabets (a list of alphanumeric and space characters)
       are passed to plugins (plugin.h)
 
-2004-01-13  Aleksey Cheusov  <vle at gmx.net}
+2004-01-13  cheusov  <vle@gmx.net>
 
   * dictfmt.c:
   00-database-short is added to .dict file because
       older dictd versions need it.
 
-2004-01-08  Bob Hilliard  <hilliard at debian.org}
+2004-01-08  Bob Hilliard  <hilliard@debian.org>
 
   * dictfmt.1:
   Clarified what goes into the 00-database-info and what is considered
   the first headword
 
-2004-01-08  Aleksey Cheusov  <vle at gmx.net}
+2004-01-08  cheusov  <vle@gmx.net>
 
   * dictd.c:
   'dictd --test|--test-file' notifies about invalid database name
@@ -1004,7 +1052,7 @@
   * plugin.c:
   code cleanups
 
-2004-01-07  Aleksey Cheusov  <vle at gmx.net}
+2004-01-07  cheusov  <vle@gmx.net>
 
   * daemon.c, dictd.8, example_complex.conf:
   '{match,define} {*,!}' ignore invisible dictionaries.
@@ -1048,7 +1096,7 @@
   LC_CTYPE and LC_COLLATE are set.
       As a result date and time are printed to log using "C" locale.
 
-2004-01-06  Aleksey Cheusov  <vle at gmx.net}
+2004-01-06  cheusov  <vle@gmx.net>
 
   * dictfmt.1, dictfmt.c:
   added: --columns options to 'dictfmt' which sets a number of columns for
@@ -1069,11 +1117,11 @@
   * dictfmt.c:
   dictfmt correctly wraps utf-8 strings at pos 79
 
-2004-01-05  Bob Hilliard  <hilliard at debian.org}
+2004-01-05  Bob Hilliard  <hilliard@debian.org>
 
   * dictfmt.c: Fix formatting problems
 
-2004-01-05  Aleksey Cheusov  <vle at gmx.net}
+2004-01-05  cheusov  <vle@gmx.net>
 
   * dictfmt.c:
   'dictfmt -f' uses default FMT_MAXPOS
@@ -1088,12 +1136,12 @@
       dictfmt 1.9.12 or later is required.
       Special headword 00-database-alphabet is used.
 
-2004-01-04  Aleksey Cheusov  <vle at gmx.net}
+2004-01-04  cheusov  <vle@gmx.net>
 
   * dictfmt.c:
   special headwords are not copied to .dict file
 
-2003-12-30  Aleksey Cheusov  <vle at gmx.net}
+2003-12-30  cheusov  <vle@gmx.net>
 
   * dictunformat:
   00-database-alphabet is skipped
@@ -1115,7 +1163,7 @@
       for implementing LEV strategy for utf-8 dictionaries.
       Its definition consists of all characters present in the headwords.
 
-2003-12-24  Aleksey Cheusov  <vle at gmx.net}
+2003-12-24  cheusov  <vle@gmx.net>
 
   * index.c:
   When utf-8 locale is set,
@@ -1129,12 +1177,12 @@
       dictd-1.9.11 tarball was made without ChangeLog file.
       Now it is in its usual place.
 
-2003-12-18  Aleksey Cheusov  <vle at gmx.net}
+2003-12-18  cheusov  <vle@gmx.net>
 
   * Makefile.in:
   fix for 'make ChangeLog'
 
-2003-12-08  Aleksey Cheusov  <vle at gmx.net}
+2003-12-08  cheusov  <vle@gmx.net>
 
   * NEWS: *** empty log message ***
 
@@ -1150,7 +1198,7 @@
   * dictd.c, dictzip.c, dict.c:
   changed --license|--help|--version message
 
-2003-12-05  Bob Hilliard  <hilliard at debian.org}
+2003-12-05  Bob Hilliard  <hilliard@debian.org>
 
   * dictfmt.1:
   Clarified and extended test regarding database headers in dictfmt.1
@@ -1159,12 +1207,12 @@
   Added Usage: line to help message in dict.c, dictd.c, and dicfmt.c
   Clarified --locale requirements in dictd.8
 
-2003-11-30  Aleksey Cheusov  <vle at gmx.net}
+2003-11-30  cheusov  <vle@gmx.net>
 
   * NEWS:
   NEWS file becomes a part of dictd distribution
 
-2003-11-26  Aleksey Cheusov  <vle at gmx.net}
+2003-11-26  cheusov  <vle@gmx.net>
 
   * example_complex.conf:
   'lev' strategy is also disabled for standard databases
@@ -1172,7 +1220,7 @@
   * index.c:
   "'locale '%s' can not be used ..." error message is put to log file
 
-2003-11-05  Aleksey Cheusov  <vle at gmx.net}
+2003-11-05  cheusov  <vle@gmx.net>
 
   * Makefile.in:
   'make distclean' removes 'dictl' and 'colorit' executables
@@ -1180,7 +1228,7 @@
   * INSTALL, example_complex.conf:
   documentation update
 
-2003-11-03  Aleksey Cheusov  <vle at gmx.net}
+2003-11-03  cheusov  <vle@gmx.net>
 
   * Makefile.in, configure.in, defs.h, dictdplugin-config.in, dictdplugin.c, dictdplugin.h, plugin.c, strategy.h:
   constants for search strategies and function names
@@ -1195,7 +1243,7 @@
       using -D command line argument.
   Documentation update for 'colorit'
 
-2003-10-31  Aleksey Cheusov  <vle at gmx.net}
+2003-10-31  cheusov  <vle@gmx.net>
 
   * configure.in:
   CFLAGS is changed when we know exactly the plugins supported
@@ -1214,12 +1262,12 @@
       dictd* can be built on Solaris-9
   fixed: yet another warning message
 
-2003-10-30  Aleksey Cheusov  <vle at gmx.net}
+2003-10-30  cheusov  <vle@gmx.net>
 
   * configure.in:
   better checking for presence of functions which are not in libc
 
-2003-10-28  Aleksey Cheusov  <vle at gmx.net}
+2003-10-28  cheusov  <vle@gmx.net>
 
   * colorit.in:
   added: --pp, -h and -V aoptions
@@ -1233,13 +1281,13 @@
   script becomes gawk-spesific (3.1?)
   m4 is used as a preprocessor by default
 
-2003-10-27  Aleksey Cheusov  <vle at gmx.net}
+2003-10-27  cheusov  <vle@gmx.net>
 
   * configure.in, dictP.h, dictfmt.c, getopt.c, getopt_long.c, setenv.c:
   'getopt_long' again
   'setenv' implementation for Solaris-9
 
-2003-10-26  Aleksey Cheusov  <vle at gmx.net}
+2003-10-26  cheusov  <vle@gmx.net>
 
   * dictl.in:
   ~ replaced for $HOME for shells that disalike it
@@ -1266,7 +1314,7 @@
   * parse.c:
   changes necessary to compiledictd on MacOS-X 10.1 (cc - gcc2.95.2)
 
-2003-10-22  Aleksey Cheusov  <vle at gmx.net}
+2003-10-22  cheusov  <vle@gmx.net>
 
   * plugin.c:
   fixes for invisible + virtual + plugin
@@ -1286,7 +1334,7 @@
 
   * defs.h: *** empty log message ***
 
-2003-10-20  Aleksey Cheusov  <vle at gmx.net}
+2003-10-20  cheusov  <vle@gmx.net>
 
   * dictd.c:
   dictd correctly reloads configuration file when --pp is used
@@ -1294,7 +1342,7 @@
   * index.c:
   more verbose -dsearch
 
-2003-10-14  Aleksey Cheusov  <vle at gmx.net}
+2003-10-14  cheusov  <vle@gmx.net>
 
   * strategy.c, strategy.h, dictd.8, dictd.c, example_complex.conf, plugin.c, plugin.h, daemon.c:
   a few fixes
@@ -1304,7 +1352,7 @@
   added: dictd -pp <prog> sets a preprocessor for configuration files
       See dictd.8 and example_complex.conf.
 
-2003-10-13  Aleksey Cheusov  <vle at gmx.net}
+2003-10-13  cheusov  <vle@gmx.net>
 
   * configure.in:
   libnsl is really optional
@@ -1315,7 +1363,7 @@
 
   * example_complex.conf: *** empty log message ***
 
-2003-10-11  Aleksey Cheusov  <vle at gmx.net}
+2003-10-11  cheusov  <vle@gmx.net>
 
   * dictl.in:
   filename is doublequoted
@@ -1329,7 +1377,7 @@
   * Makefile.in, clientparse.y, clientscan.l, configure.in, index.c, servparse.y, servscan.l:
   changes necessary to build dictd/dict/dictfmt/dictzip on FreeBSD4.8
 
-2003-10-08  Aleksey Cheusov  <vle at gmx.net}
+2003-10-08  cheusov  <vle@gmx.net>
 
   * libmaa/configure.in, libmaa/maaP.h:
   better checking for getopt(3)
@@ -1349,7 +1397,7 @@
   * dictl.1, dictl.in:
   added: initial version of dictl
 
-2003-10-02  Aleksey Cheusov  <vle at gmx.net}
+2003-10-02  cheusov  <vle@gmx.net>
 
   * libmaa/config.h.in:
   removed: libmaa/config.h.in
@@ -1362,7 +1410,7 @@
       entry name beginning with @ symbol in a similar way
       as 'database' and 'database_plugin'
 
-2003-10-01  Aleksey Cheusov  <vle at gmx.net}
+2003-10-01  cheusov  <vle@gmx.net>
 
   * dictd.c: *** empty log message ***
 
@@ -1381,7 +1429,7 @@
   * config.guess, config.sub, libmaa/config.guess, libmaa/config.sub:
   updated config.{sub,guess} files
 
-2003-09-30  Aleksey Cheusov  <vle at gmx.net}
+2003-09-30  cheusov  <vle@gmx.net>
 
   * dictd.c, dictfmt.c:
   fixed: --headword-separator doesn't work with -f, -p and -v formats
@@ -1390,11 +1438,11 @@
   fixed: dictfmt -f doesn't work correctly if the first two lines are empty
       Affected versions of dictfmt:  1.6.1-1.9.10
 
-2003-09-28  faith  <faith at dict.org}
+2003-09-28  faith  <faith@dict.org>
 
   * dictfmt.c: Changes for updated VERA and FOLDOC databases
 
-2003-09-19  Aleksey Cheusov  <vle at gmx.net}
+2003-09-19  cheusov  <vle@gmx.net>
 
   * dictdplugin-config.in:
   fixed: typo
@@ -1402,12 +1450,12 @@
   * index.c, libmaa/source.c, libmaa/string.c, parse.c:
   a few strlcpy have been replaced with strncpy and memcpy
 
-2003-09-05  Aleksey Cheusov  <vle at gmx.net}
+2003-09-05  cheusov  <vle@gmx.net>
 
   * Makefile.in:
   'all' target is above 'samples' one
 
-2003-09-04  Aleksey Cheusov  <vle at gmx.net}
+2003-09-04  cheusov  <vle@gmx.net>
 
   * dictP.h:
   added: missing declaration of strlcat
@@ -1417,7 +1465,7 @@
   avoided: use of :: in makefile
   others changes
 
-2003-09-01  Aleksey Cheusov  <vle at gmx.net}
+2003-09-01  cheusov  <vle@gmx.net>
 
   * dictdplugin_judy.c:
   Judy plugin supports the following options
@@ -1433,7 +1481,7 @@
   * Makefile.in, deps:
   fixed: missing -fPIC
 
-2003-08-31  Aleksey Cheusov  <vle at gmx.net}
+2003-08-31  cheusov  <vle@gmx.net>
 
   * dictdplugin_judy.c:
   judy-based plugin:
@@ -1441,7 +1489,7 @@
       in plugin config and databases
     double-quotes are removed from the database file names
 
-2003-08-28  Bob Hilliard  <hilliard at debian.org}
+2003-08-28  Bob Hilliard  <hilliard@debian.org>
 
   * clientparse.y, dict.1, dictd.8:
   clientparse.y will accept "pager' as the pager
@@ -1450,7 +1498,7 @@
   8-bit or utf-8 dictionary is listed in dictd.conf,
   .
 
-2003-08-27  Aleksey Cheusov  <vle at gmx.net}
+2003-08-27  cheusov  <vle@gmx.net>
 
   * dictvd:
   initial version of dictvd
@@ -1460,7 +1508,7 @@
 
   * daemon.c, dictd.c:
   fixed: missing dictdb_free call
-  patch by Michael Bunk <bunk at imn.htwk-leipzig.de} fixing:
+  patch by Michael Bunk <bunk@imn.htwk-leipzig.de> fixing:
          a typo giving the incomprehensible failure message,
          a typo resulting in 'dict --server-info' showing
            same compressed/uncompressed database sizes
@@ -1476,7 +1524,7 @@
   a default directory for databases
       is passed to plugins (DICT_PLUGIN_INITDATA_DEFDBDIR)
 
-2003-08-18  Aleksey Cheusov  <vle at gmx.net}
+2003-08-18  cheusov  <vle@gmx.net>
 
   * Makefile.in:
   'make cvsclean' and 'make dist' removes the temporary directory autom4te.cache
@@ -1484,7 +1532,7 @@
   * dictd.c:
   A multilined short name of the database is trancated.
 
-2003-08-11  Aleksey Cheusov  <vle at gmx.net}
+2003-08-11  cheusov  <vle@gmx.net>
 
   * dictdplugin_judy.c, heap.c, heap.h:
   code clean-ups
@@ -1495,11 +1543,11 @@
       calls of internal heap. Sometimes it works faster.
       This feature is #ifdef'ed
 
-2003-08-11  faith  <faith at dict.org}
+2003-08-11  faith  <faith@dict.org>
 
   * README: Update instructions on how to join mailing lists
 
-2003-08-10  Aleksey Cheusov  <vle at gmx.net}
+2003-08-10  cheusov  <vle@gmx.net>
 
   * dictdplugin_exit.c:
   fixed: compiler warning message
@@ -1510,7 +1558,7 @@
   * Makefile.in, dictdplugin_judy.c:
   memory leaks in Judy-based plugin fixed
 
-2003-08-08  Aleksey Cheusov  <vle at gmx.net}
+2003-08-08  cheusov  <vle@gmx.net>
 
   * dictdplugin_judy.c:
   buffer overflow in Judy-based plugin fixed
@@ -1549,7 +1597,7 @@
   * defs.h, plugin.c:
   one dictdb_free call for one call of dictdb_search
 
-2003-08-07  Aleksey Cheusov  <vle at gmx.net}
+2003-08-07  cheusov  <vle@gmx.net>
 
   * Makefile.in, dictdplugin_judy.c, libmaa/maaP.h, libmaa/strlcpy.c:
   added: initial version of Judy-based plugin
@@ -1557,7 +1605,7 @@
   * dictdplugin_popen.cpp:
   fixed: gcc-3.3 warning message
 
-2003-08-06  Aleksey Cheusov  <vle at gmx.net}
+2003-08-06  cheusov  <vle@gmx.net>
 
   * Makefile.in, config.h.in, configure.in, dictP.h, dictfmt.c, dictzip.c, index.c, libmaa/config.h.in, libmaa/configure.in, libmaa/maaP.h, libmaa/source.c, libmaa/string.c, libmaa/strlcpy.c, parse.c, plugin.c, strategy.c, strlcpy.c:
   'strncpy' function is replaced with 'strlcpy' in both dict* and libmaa
@@ -1573,7 +1621,7 @@
   fixed: dictd doesn't call plugin's dictdb_free function
       if --test-nooutput is applied (only commands for debugging are affected)
 
-2003-08-01  Aleksey Cheusov  <vle at gmx.net}
+2003-08-01  cheusov  <vle@gmx.net>
 
   * plugin.c:
   more informative -dinit loggin
@@ -1585,7 +1633,7 @@
   code clean-ups
   fixed: --without-headword
 
-2003-07-22  Aleksey Cheusov  <vle at gmx.net}
+2003-07-22  cheusov  <vle@gmx.net>
 
   * ChangeLog:
   ChangeLog is up-to-date
@@ -1595,18 +1643,18 @@
   DICTD version --> 1.9.10
   LIBMAA version --> 0.96
 
-2003-07-21  Aleksey Cheusov  <vle at gmx.net}
+2003-07-21  cheusov  <vle@gmx.net>
 
   * daemon.c, dictd.8, dictd.c:
   'filter' option is implemented. Thanks to
-      Michael Bunk <bunk at imn.htwk-leipzig.de} for the patch.
+      Michael Bunk <bunk@imn.htwk-leipzig.de> for the patch.
 
-2003-07-16  Aleksey Cheusov  <vle at gmx.net}
+2003-07-16  cheusov  <vle@gmx.net>
 
   * INSTALL, dictd.8:
   Documentation update
 
-2003-07-15  Aleksey Cheusov  <vle at gmx.net}
+2003-07-15  cheusov  <vle@gmx.net>
 
   * Makefile.in:
   hide e-mails from ChangeLog
@@ -1618,7 +1666,7 @@
   * index.c:
   insignificant speed-up of 'lev' strategy
 
-2003-07-10  Aleksey Cheusov  <vle at gmx.net}
+2003-07-10  cheusov  <vle@gmx.net>
 
   * Makefile.in, configure.in:
   DICT_LDFLAGS, DICTD_LDFLAGS, DICTZIP_LDFLAGS and DICTFMT_LDFLAGS
@@ -1629,12 +1677,12 @@
       DICTD_LDFLAGS='-L/usr/local/lib -ltre' CPPFLAGS='-I/usr/local/include' \
        ./configure
 
-2003-07-09  Aleksey Cheusov  <vle at gmx.net}
+2003-07-09  cheusov  <vle@gmx.net>
 
   * dictfmt.c:
   fix
 
-2003-07-07  Aleksey Cheusov  <vle at gmx.net}
+2003-07-07  cheusov  <vle@gmx.net>
 
   * Makefile.in: *** empty log message ***
 
@@ -1675,18 +1723,18 @@
   fixed: libmaa/configure --enable-shared
   upgrade to autoconf 2.53
 
-2003-06-30  Aleksey Cheusov  <vle at gmx.net}
+2003-06-30  cheusov  <vle@gmx.net>
 
   * configure.in:
   System functions wcXXX and mbXXX are used if present.
 
-2003-06-23  Aleksey Cheusov  <vle at gmx.net}
+2003-06-23  cheusov  <vle@gmx.net>
 
   * dictfmt.c:
   fixed: incorrect spaces trimming.
-      Thanks to Kuang-che Wu <kcwu at kcwu.homeip.net} for the bug report
+      Thanks to Kuang-che Wu <kcwu@kcwu.homeip.net> for the bug report
 
-2003-06-10  Aleksey Cheusov  <vle at gmx.net}
+2003-06-10  cheusov  <vle@gmx.net>
 
   * dictfmt.c, dictfmt.1:
   added: -t option for 'dictfmt'
@@ -1707,12 +1755,12 @@
   00-database-{info,short,url} are processed in the same
       way as 00database{info,short,url}
 
-2003-05-30  Bob Hilliard  <hilliard at debian.org}
+2003-05-30  Bob Hilliard  <hilliard@debian.org>
 
   * dictd.8: Added mention ot SIGHUP causing dictd to re-read the configuration
   file, and removed BUG note saying this can't be done.
 
-2003-05-23  Aleksey Cheusov  <vle at gmx.net}
+2003-05-23  cheusov  <vle@gmx.net>
 
   * dictd.8, dictfmt.1, dictfmt.c, dictunformat:
   added: dictfmt --without-info
@@ -1724,13 +1772,13 @@
       For 00-database-info headword see --without-info option.
   'dictfmt' documentation update
 
-2003-04-30  Aleksey Cheusov  <vle at gmx.net}
+2003-04-30  cheusov  <vle@gmx.net>
 
   * Makefile.in:
   fixed: some problems with 'make install'.
-      Thanks to Kurt Wall <kwall at kurtwerks.com} for remarks
+      Thanks to Kurt Wall <kwall@kurtwerks.com> for remarks
 
-2003-04-14  Aleksey Cheusov  <vle at gmx.net}
+2003-04-14  cheusov  <vle@gmx.net>
 
   * ChangeLog:
   ChangeLog is up-to-date
@@ -1754,13 +1802,13 @@
   * daemon.c:
   file descriptors are explicitly initialized
 
-2003-04-10  Aleksey Cheusov  <vle at gmx.net}
+2003-04-10  cheusov  <vle@gmx.net>
 
   * configure.in, defs.h, dictP.h, dictd.c, plugin.c, plugin.h, Makefile.in, config.h.in:
   'libdl' is used instead of 'libltdl' on platforms where it is available
   dictP.h cleaups
 
-2003-04-09  Aleksey Cheusov  <vle at gmx.net}
+2003-04-09  cheusov  <vle@gmx.net>
 
   * dict.c:
   nothing
@@ -1772,16 +1820,16 @@
 
   * dictP.h, config.h.in, configure.in:
   dictP.h and configure.in clean-ups
-      Thanks to Kimura Fuyuki <fuyuki at hadaly.org} for remarks
+      Thanks to Kimura Fuyuki <fuyuki@hadaly.org> for remarks
 
-2003-04-09  Bob Hilliard  <hilliard at debian.org}
+2003-04-09  Bob Hilliard  <hilliard@debian.org>
 
   * dict.c: Patched to prevent segfault/buffer overrun on excessively long
   dict command lines
   .
   .
 
-2003-04-07  Aleksey Cheusov  <vle at gmx.net}
+2003-04-07  cheusov  <vle@gmx.net>
 
   * configure.in:
   fixed: 'dictd' can not be configured with ./configure --with-local-zlib
@@ -1799,15 +1847,15 @@
 
   * index.c, dictd.h, dictd.c, dictd.8, daemon.c:
   added: dictd inetd support (dictd --inetd)
-      Thanks to Joey Hess <joeyh at debian.org}
-      and Robert D. Hilliard <hilliard at debian.org} for the patch.
+      Thanks to Joey Hess <joeyh@debian.org>
+      and Robert D. Hilliard <hilliard@debian.org> for the patch.
 
-2003-03-27  Aleksey Cheusov  <vle at gmx.net}
+2003-03-27  cheusov  <vle@gmx.net>
 
   * dictP.h:
   fixed: compilation error
 
-2003-03-26  Aleksey Cheusov  <vle at gmx.net}
+2003-03-26  cheusov  <vle@gmx.net>
 
   * ChangeLog:
   ChangeLog is up-to-date
@@ -1815,14 +1863,14 @@
   * configure.in:
   version == 1.9.8
 
-2003-03-24  Aleksey Cheusov  <vle at gmx.net}
+2003-03-24  cheusov  <vle@gmx.net>
 
   * data.c:
   fixed: incorrect dzip format detection
   fixed: possible crash while reading too long COMMENT or FNAME fields of
       the dzip'ed file
 
-2003-03-19  Aleksey Cheusov  <vle at gmx.net}
+2003-03-19  cheusov  <vle@gmx.net>
 
   * libmaa/maaP.h, strategy.c, strategy.h, vsnprintf.c, wcrtomb.c, wctomb.c, index.c, index.h, mbrlen.c, mbrtowc.c, mbstowcs.c, mbtowc.c, plugin.c, plugin.h, snprintf.c, dictdplugin.h, dictfmt.c, dictzip.c, dictd.h, dictd.c, dictP.h, defs.h, data.h, data.c, config.h.in, configure.in, daemon.c, Makefile.in:
   Functions related to plugin have moved to plugin.c.
@@ -1833,7 +1881,7 @@
       As a result 'dictd' can be compiled on CYGWIN.
   fixed: 'dictdb_free' function is not called
 
-2003-03-09  Aleksey Cheusov  <vle at gmx.net}
+2003-03-09  cheusov  <vle@gmx.net>
 
   * ChangeLog: ChangeLog is up-to-date
 
@@ -1850,12 +1898,12 @@
   * configure.in:
   version ==> 1.9.7
 
-2003-03-04  Aleksey Cheusov  <vle at gmx.net}
+2003-03-04  cheusov  <vle@gmx.net>
 
   * data.c:
   fixed: error message
 
-2003-03-03  Aleksey Cheusov  <vle at gmx.net}
+2003-03-03  cheusov  <vle@gmx.net>
 
   * Makefile.in:
   fixed: bug in 'make samples'. It requires installed 'dictfmt'.
@@ -1878,7 +1926,7 @@
   * dictdplugin_popen.cpp:
   fixed: initializing the array with zeros
 
-2003-03-02  Aleksey Cheusov  <vle at gmx.net}
+2003-03-02  cheusov  <vle@gmx.net>
 
   * daemon.c, dictd.c, dictd.h:
   fixed: DEFINE and MATCH commands return '0 definitions found' but the
@@ -1907,14 +1955,14 @@
       (substring, suffix and word strategies) because it accesses memory
       outside mmap'ed region.
 
-2003-02-28  Aleksey Cheusov  <vle at gmx.net}
+2003-02-28  cheusov  <vle@gmx.net>
 
   * index.c, dictdplugin_popen.cpp:
   fixed: dictWord structures are not initialized with zeros
 
   * index.c: removed: something strange
 
-2003-02-23  Aleksey Cheusov  <vle at gmx.net}
+2003-02-23  cheusov  <vle@gmx.net>
 
   * daemon.c, dictd.c, dictd.h:
   fixed: if the 'name' keyword is used in database section, and
@@ -1976,7 +2024,7 @@
   * dictd.h, servparse.y, daemon.c, dictd.c:
   explicit flag is used for database_exit but the NULL indexFilename
 
-2003-02-21  Aleksey Cheusov  <vle at gmx.net}
+2003-02-21  cheusov  <vle@gmx.net>
 
   * daemon.c:
   debugging command has been removed
@@ -1997,7 +2045,7 @@
   fixed: usage message
   'dictfmt_plugin' fails if plugin filename is not specified
 
-2003-02-20  Aleksey Cheusov  <vle at gmx.net}
+2003-02-20  cheusov  <vle@gmx.net>
 
   * servscan.l:
   fixed: dictd.8 says that 'string' can be continued between lines
@@ -2008,7 +2056,7 @@
   added: ./configure --with-nec-socks5 for those who are behind socks server
        This causes linking with socks5 library both 'dictd' and 'dict'.
 
-2003-02-15  Aleksey Cheusov  <vle at gmx.net}
+2003-02-15  cheusov  <vle@gmx.net>
 
   * ChangeLog:
   ChangeLog is up-to-date
@@ -2019,7 +2067,7 @@
   * dictd.8:
   fixed: misprint in the documentation
 
-2003-02-10  Aleksey Cheusov  <vle at gmx.net}
+2003-02-10  cheusov  <vle@gmx.net>
 
   * configure.in:
   AC_REPLACE_FUNCS(towlower) -> AC_CHECK_FUNCS
@@ -2040,7 +2088,7 @@
   'dictfmt' fails if --locale="C" (the default) is specified and 8-bit
       head word is encountered.
 
-2003-02-07  Aleksey Cheusov  <vle at gmx.net}
+2003-02-07  cheusov  <vle@gmx.net>
 
   * dictfmt_index2word:
   'dictfmt_index2word' failes if it is run with the locale "C" and
@@ -2065,25 +2113,25 @@
   * Makefile.in:
   fixed: bug in 'samples' target
 
-2003-02-06  Bob Hilliard  <hilliard at debian.org}
+2003-02-06  Bob Hilliard  <hilliard@debian.org>
 
   * dictunformat.1, dictfmt_index2word.1, dictfmt_virtual.1, dictfmt_index2suffix.1:
   Really added dictfmt_virtual.1, dictunformat.1, dictfmt_index2word.1,
   and dictfmt_index2suffix
 
-2003-02-02  Bob Hilliard  <hilliard at debian.org}
+2003-02-02  Bob Hilliard  <hilliard@debian.org>
 
   * dict.c, dictd.8:
   Fixed dict.c to accept --serverinfo option, minor changes to dictd.8
   Added dictfmt_index2suffix.1, dictfmt_index2word.1, dictfmt_virtual.1,
   and dictunformat.1
 
-2003-01-21  Aleksey Cheusov  <vle at gmx.net}
+2003-01-21  cheusov  <vle@gmx.net>
 
   * dictfmt_index2word:
   awk script inside conforms to posix
 
-2003-01-19  Aleksey Cheusov  <vle at gmx.net}
+2003-01-19  cheusov  <vle@gmx.net>
 
   * vsnprintf.c, snprintf.c, dictfmt.c, dictzip.c, dictd.c, daemon.c, configure.in, config.h.in:
   'dictd', 'dictfmt' and 'dictzip' use snprintf and vsnprintf functions
@@ -2116,7 +2164,7 @@
   * dictd.c:
   added: additional check for empty database list
 
-2003-01-17  Aleksey Cheusov  <vle at gmx.net}
+2003-01-17  cheusov  <vle@gmx.net>
 
   * configure.in:
   version = 1.9.3
@@ -2125,7 +2173,7 @@
   fixed: dictd may crash when access section of
          the configuration file is empty
 
-2003-01-16  Bob Hilliard  <hilliard at debian.org}
+2003-01-16  Bob Hilliard  <hilliard@debian.org>
 
   * dictfmt_virtual, servparse.y:
   Patched servparse.y to make dict -D give a nicer message for
@@ -2133,12 +2181,12 @@
   Patched dictfmt_virtual-patch to prevent failing when optional
   argument info_files is omitted
 
-2003-01-16  Aleksey Cheusov  <vle at gmx.net}
+2003-01-16  cheusov  <vle@gmx.net>
 
   * ChangeLog:
   ChangeLog is up-to-date
 
-2003-01-15  Aleksey Cheusov  <vle at gmx.net}
+2003-01-15  cheusov  <vle@gmx.net>
 
   * configure.in:
   version=1.9.2
@@ -2148,7 +2196,7 @@
       for a single definition
   added: --headword-separator argument to 'dictunformat' utility
 
-2003-01-14  Aleksey Cheusov  <vle at gmx.net}
+2003-01-14  cheusov  <vle@gmx.net>
 
   * wcrtomb.c:
   added: wcrtomb.c
@@ -2158,7 +2206,7 @@
     files and they are used by default instead of standard ones.
     It seems glibc-2.1.3 has broken wcrtomb.
 
-2003-01-09  Aleksey Cheusov  <vle at gmx.net}
+2003-01-09  cheusov  <vle@gmx.net>
 
   * index.c, dictunformat:
   mbstate_t
@@ -2167,14 +2215,14 @@
   install/uninstall makefile's targets use DESTDIR environment variables.
          This simplifies building RPMs.
 
-2003-01-08  Bob Hilliard  <hilliard at debian.org}
+2003-01-08  Bob Hilliard  <hilliard@debian.org>
 
   * dictzip.c, index.c:
   Patched dictzip.c to revent segfault on excessively long command lines
   Patched index.c so dictd will startup without error if config file
   includes the /dev/null database
 
-2003-01-03  Aleksey Cheusov  <vle at gmx.net}
+2003-01-03  cheusov  <vle@gmx.net>
 
   * index.c:
   mbstate_t is not used
@@ -2190,7 +2238,7 @@
          --without-url
          --without-time
 
-2002-12-25  Aleksey Cheusov  <vle at gmx.net}
+2002-12-25  cheusov  <vle@gmx.net>
 
   * Makefile.in:
   'dictunformat' is installed and uninstalled like 'dictfmt'
@@ -2202,7 +2250,7 @@
          This may be used to recreate database from 8-bit character sets
          to utf-8 or to another format
 
-2002-12-17  Aleksey Cheusov  <vle at gmx.net}
+2002-12-17  cheusov  <vle@gmx.net>
 
   * ChangeLog:
   ChangeLog is up-to-date
@@ -2212,7 +2260,7 @@
   libmaa version set to 0.95
   dictd version set 1.9.1
 
-2002-12-15  Bob Hilliard  <hilliard at debian.org}
+2002-12-15  Bob Hilliard  <hilliard@debian.org>
 
   * dict.c:
   Modified client_print_listed() to make dict -D and dict -S print long
@@ -2220,7 +2268,7 @@
   .
   .
 
-2002-12-10  Aleksey Cheusov  <vle at gmx.net}
+2002-12-10  cheusov  <vle@gmx.net>
 
   * dictd.h:
   fixed: problems in building 'dictd' without plugin support
@@ -2231,12 +2279,12 @@
   * configure.in:
   configure.in: version number 1.8.0 ==> 1.9.0
 
-2002-12-05  Aleksey Cheusov  <vle at gmx.net}
+2002-12-05  cheusov  <vle@gmx.net>
 
   * search_man:
   fixed: forgot to remove sending a debugging e-mail message
 
-2002-12-04  Aleksey Cheusov  <vle at gmx.net}
+2002-12-04  cheusov  <vle@gmx.net>
 
   * example_virtual.conf:
   fixed: typo
@@ -2253,7 +2301,7 @@
          See man dictd.8 and example_virtual.conf for details.
   fixed: crash during debugging (-dsearch) output (80 chars limit)
 
-2002-12-03  Aleksey Cheusov  <vle at gmx.net}
+2002-12-03  cheusov  <vle@gmx.net>
 
   * dictdplugin_popen.cpp, example_popen.conf, index.c, search_man, dictdplugin.h, dictdplugin_exit.c, INSTALL, Makefile.in, daemon.c, data.c, dictd.h, dictdplugin-config.in:
   fixed: warning messages produced by gcc
@@ -2273,7 +2321,7 @@
     See man dictd.
   added: dictdplugin-config --dictdir and --plugindir options
 
-2002-12-02  Aleksey Cheusov  <vle at gmx.net}
+2002-12-02  cheusov  <vle@gmx.net>
 
   * dictd.c:
   fixed: not critical memory leak
@@ -2283,17 +2331,17 @@
   * dictd.8:
   documentation update
 
-2002-11-28  Aleksey Cheusov  <vle at gmx.net}
+2002-11-28  cheusov  <vle@gmx.net>
 
   * INSTALL, TODO, dictd.8, dictfmt_plugin, example2.conf, example3.conf:
   documentation update
 
-2002-11-25  Aleksey Cheusov  <vle at gmx.net}
+2002-11-25  cheusov  <vle@gmx.net>
 
   * servparse.y:
-  servparse.y: fix by Dima Dorfman <d+dict at trit.org}
+  servparse.y: fix by Dima Dorfman <d+dict@trit.org>
 
-2002-11-19  Aleksey Cheusov  <vle at gmx.net}
+2002-11-19  cheusov  <vle@gmx.net>
 
   * daemon.c:
   dictd can processes several conversions made by plugin.
@@ -2308,7 +2356,7 @@
   fixed: possible crash in libmaa/text.c:txt_soundex
          My previous commit did not fix it
 
-2002-11-18  Aleksey Cheusov  <vle at gmx.net}
+2002-11-18  cheusov  <vle@gmx.net>
 
   * libmaa/text.c, utf8_ucs4.c, dictfmt.c, index.c:
   fixed: problems with 'toupper/tolower/isXXXX (-1)
@@ -2318,18 +2366,18 @@
   fixed: invalid calculating the UTF-8 string length
          while formatting the dictionary
 
-2002-11-04  Bob Hilliard  <hilliard at debian.org}
+2002-11-04  Bob Hilliard  <hilliard@debian.org>
 
   * config.sub, config.guess:
   updated config.sub and config.guess to September 02 values
   .
 
-2002-10-29  Aleksey Cheusov  <vle at gmx.net}
+2002-10-29  cheusov  <vle@gmx.net>
 
   * utf8_ucs4.c:
   fixed: utf8_ucs4.c:strlen_utf8
 
-2002-10-28  Aleksey Cheusov  <vle at gmx.net}
+2002-10-28  cheusov  <vle@gmx.net>
 
   * ChangeLog, Makefile.in, configure.in, daemon.c, dictd.c, dictd.h, dictfmt_plugin, dictfmt_virtual:
   added: 'dictfmt_virtual' utility for creating virtual dictionary
@@ -2339,7 +2387,7 @@
   * configure.in, dictd.c, ChangeLog:
   SIGHUP causes 'dictd' to reload configuration file
 
-2002-10-18  Bob Hilliard  <hilliard at debian.org}
+2002-10-18  Bob Hilliard  <hilliard@debian.org>
 
   * dictfmt.1, dictfmt.c, dictd.8:
   Updated dictd.8 to include options added in 1.8.0.
@@ -2348,19 +2396,19 @@
   Patched dictfmt.c to correct help message for -c5 and to fix the bug
   that caused the last headword read in to be duplicated in the index.
 
-2002-10-17  Aleksey Cheusov  <vle at gmx.net}
+2002-10-17  cheusov  <vle@gmx.net>
 
   * daemon.c, dictd.c, dictd.h:
   removed: --define-strategy option for 'dictd'
   renamed: --match-strategy ==> --default-strategy
   added:   --disable-strategy option for 'dictd'
 
-2002-10-16  Aleksey Cheusov  <vle at gmx.net}
+2002-10-16  cheusov  <vle@gmx.net>
 
   * dictfmt.c:
   fixed: typo
 
-2002-10-14  Aleksey Cheusov  <vle at gmx.net}
+2002-10-14  cheusov  <vle@gmx.net>
 
   * index.c: *** empty log message ***
 
@@ -2375,7 +2423,7 @@
   ADDED: new search strategy 'word'
   fixed: uninitialized variable charcount from index.c:dict_table_init
 
-2002-10-11  Aleksey Cheusov  <vle at gmx.net}
+2002-10-11  cheusov  <vle@gmx.net>
 
   * daemon.c, dictd.c, ChangeLog:
   added:   --match-strategy argument to dictd.
@@ -2384,13 +2432,13 @@
            It sets the default strategy for 'define' queries
   update ChangeLog
 
-2002-09-27  Aleksey Cheusov  <vle at gmx.net}
+2002-09-27  cheusov  <vle@gmx.net>
 
   * libmaa/config.h.in, libmaa/configure.in, libmaa/error.c, ChangeLog, Makefile.in, config.h.in, configure.in, daemon.c, data.c, dictP.h, dictd.c, dictd.h, dictdplugin.c, dictdplugin.h, dictdplugin_exit.c, index.c:
   added: possibility to disable plugin support
          by running ./configure --disable-plugin
   fixed: problems with make -j. patch by
-         Andrzej Dopierala <undefine at aramin.one.pl}
+         Andrzej Dopierala <undefine@aramin.one.pl>
   fixed: problems with make ChangeLog
   added: possibility to build 'dictd' on platforms not supporting mmap()
   added: a lot of 'const' modifyers
@@ -2445,12 +2493,12 @@
            4) Russian-English dictionary
   fixed: bug in 'dict_search_plugin' function
 
-2002-09-18  Aleksey Cheusov  <vle at gmx.net}
+2002-09-18  cheusov  <vle@gmx.net>
 
   * dictfmt.c:
   dictfmt: --headword-separator doesn't imply --without-headword
 
-2002-09-17  Aleksey Cheusov  <vle at gmx.net}
+2002-09-17  cheusov  <vle@gmx.net>
 
   * dictdplugin.c, dictdplugin.h:
   constant strings definitions have been moved to dictdplugin.c
@@ -2458,7 +2506,7 @@
   * index.c:
   fixed: memory leak
 
-2002-09-16  Aleksey Cheusov  <vle at gmx.net}
+2002-09-16  cheusov  <vle@gmx.net>
 
   * Makefile.conf, Makefile.in, config.h.in, configure.in, daemon.c, dictd.c, dictd.h, dictdplugin-config.in, dictdplugin.c, dictdplugin.h, doc/Makefile.in, index.c, libmaa/Makefile.in, libmaa/config.h.in, libmaa/configure.in, plugin.h, INSTALL:
   fixed: bug in configure.in
@@ -2482,11 +2530,11 @@
      not a valid UTF-8 string and remaining databases will not be checked.
   fixed: warning messages produced by autoreconf
 
-2002-09-13  faith  <faith at dict.org}
+2002-09-13  faith  <faith@dict.org>
 
   * ChangeLog: Update ChangeLog
 
-2002-09-12  Aleksey Cheusov  <vle at gmx.net}
+2002-09-12  cheusov  <vle@gmx.net>
 
   * configure.in, daemon.c, data.c, dictd.c, dictd.h, dictfmt_plugin, dictzip.c, index.c, plugin.h, utf8_ucs4.c, utf8_ucs4.h:
   fixed: crash while debugging output (80 chars limit)
@@ -2503,12 +2551,12 @@
 
          See plugin.h and dictfmt_plugin for details
 
-2002-09-11  Aleksey Cheusov  <vle at gmx.net}
+2002-09-11  cheusov  <vle@gmx.net>
 
   * ChangeLog:
   ChangeLog is up-to date
 
-2002-08-23  Aleksey Cheusov  <vle at gmx.net}
+2002-08-23  cheusov  <vle@gmx.net>
 
   * dictfmt.c:
   added: --without-hw parameter to 'dictfmt'
@@ -2521,12 +2569,12 @@
   * dictd.c, dictfmt.c:
   added: locale verification both in 'dictfmt' and 'dictd'
 
-2002-08-22  Aleksey Cheusov  <vle at gmx.net}
+2002-08-22  cheusov  <vle@gmx.net>
 
   * dictfmt.c:
   'dictfmt' now removes ending spaces for the head words
 
-2002-08-21  Aleksey Cheusov  <vle at gmx.net}
+2002-08-21  cheusov  <vle@gmx.net>
 
   * dict.c:
   fixed: possible crash of 'dict' client
@@ -2542,7 +2590,7 @@
     be ignored and local BUGGY zlib library will always be used.
     Now external zlib library will be used by default.
 
-2002-08-13  Aleksey Cheusov  <vle at gmx.net}
+2002-08-13  cheusov  <vle@gmx.net>
 
   * ChangeLog, Makefile.in:
   changed: ChangeLog
@@ -2550,7 +2598,7 @@
   * Makefile.in:
   added: dictfmt_index2suffix in 'install' and 'uninstall' Makefile's targets
 
-2002-08-12  Aleksey Cheusov  <vle at gmx.net}
+2002-08-12  cheusov  <vle@gmx.net>
 
   * dictfmt_index2suffix, utf8_ucs4.c, Makefile.in, dict.c, dictd.8, dictfmt.1, dictfmt.c:
   added: dictfmt.1, dictfmt_index2suffix, patched version of dictfmt.c
@@ -2560,7 +2608,7 @@
 
   Now dictfmt is a part of dictd distribution
 
-2002-08-05  Aleksey Cheusov  <vle at gmx.net}
+2002-08-05  cheusov  <vle@gmx.net>
 
   * ChangeLog: *** empty log message ***
 
@@ -2610,26 +2658,26 @@
     old variants cause problems with the nested if/else
   added: UTF-8 support
 
-2002-08-02  faith  <faith at dict.org}
+2002-08-02  faith  <faith@dict.org>
 
   * libmaa/Makefile.in, libmaa/arg.c, libmaa/argtest.c, libmaa/base26.c, libmaa/base64.c, libmaa/basetest.c, libmaa/bit.c, libmaa/bittest.c, libmaa/configure.in, libmaa/debug.c, libmaa/debugtest.c, libmaa/decl.h, libmaa/error.c, libmaa/flags.c, libmaa/hash.c, libmaa/hashtest.c, libmaa/list.c, libmaa/listtest.c, libmaa/log.c, libmaa/maa.c, libmaa/maa.h, libmaa/maaP.h, libmaa/memory.c, libmaa/memtest.c, libmaa/mkrnd.c, libmaa/parse-concrete.c, libmaa/parse.c, libmaa/pr.c, libmaa/prime.c, libmaa/primetest.c, libmaa/prtest.c, libmaa/rnd.c, libmaa/set.c, libmaa/settest.c, libmaa/sl.c, libmaa/sltest.c, libmaa/source.c, libmaa/stack.c, libmaa/strdup.c, libmaa/string.c, libmaa/stringtest.c, libmaa/text.c, libmaa/timer.c, libmaa/xmalloc.c, servscan.l, ChangeLog, Makefile.in, clientparse.y, configure.in, daemon.c, data.c, dict.c, dictd.c, dictzip.c, index.c, net.c:
   Update with 1.7.1 release
 
-2002-05-03  faith  <faith at dict.org}
+2002-05-03  faith  <faith@dict.org>
 
   * libmaa/debugtest.c, libmaa/decl.h, libmaa/error.c, libmaa/flags.c, libmaa/hash.c, libmaa/hashtest.c, libmaa/list.c, libmaa/listtest.c, libmaa/log.c, libmaa/maa.c, libmaa/maa.h, libmaa/maaP.h, libmaa/memory.c, libmaa/memtest.c, libmaa/mkrnd.c, libmaa/parse-concrete.c, libmaa/parse.c, libmaa/pr.c, libmaa/prime.c, libmaa/primetest.c, libmaa/prtest.c, libmaa/rnd.c, libmaa/set.c, libmaa/settest.c, libmaa/sl.c, libmaa/sltest.c, libmaa/source.c, libmaa/stack.c, libmaa/strdup.c, libmaa/string.c, libmaa/stringtest.c, libmaa/text.c, libmaa/timer.c, libmaa/version.c, libmaa/xmalloc.c, INSTALL, Makefile.in, clientparse.y, config.h.in, configure.in, daemon.c, data.c, dict.1, dict.c, dictd.8, dictd.c, dictd.h, dictzip.c, index.c, libmaa/Makefile.in, libmaa/acconfig.h, libmaa/arg.c, libmaa/argtest.c, libmaa/base26.c, libmaa/base64.c, libmaa/basetest.c, libmaa/bit.c, libmaa/bittest.c, libmaa/config.h.in, libmaa/configure.in, libmaa/debug.c, net.c, servscan.l, ChangeLog:
   Sync sourceforge.net repository with dictd-1.7.0 release
 
-2001-01-12  faith  <faith at dict.org}
+2001-01-12  faith  <faith@dict.org>
 
   * Makefile.in: Bump version
 
-2001-01-01  Bob Hilliard  <hilliard at debian.org}
+2001-01-01  Bob Hilliard  <hilliard@debian.org>
 
   * dict.c:
   Aaaargh!  Previous update broke pager in dict.  This is fixed now.
 
-2000-12-31  faith  <faith at dict.org}
+2000-12-31  faith  <faith@dict.org>
 
   * Makefile.in, index.c: Fix const warning
   Bump version number
@@ -2637,7 +2685,7 @@
   * libmaa/decl.h, libmaa/text.c, decl.h, index.c:
   Made minor changes for Solaris 5.7 compilation
 
-2000-12-27  Bob Hilliard  <hilliard at debian.org}
+2000-12-27  Bob Hilliard  <hilliard@debian.org>
 
   * dict.1, dict.c, dictd.8:
        dict.c - added argument to help message for -s; made all help messages go
@@ -2647,7 +2695,7 @@
   disabled.
        dictd.8 - corrected typo
 
-2000-12-22  faith  <faith at dict.org}
+2000-12-22  faith  <faith@dict.org>
 
   * Makefile.in, codes.h, daemon.c, data.c, decl.h, dict.c, dict.h, dictP.h, dictzip.c, dictzip.h, index.c, net.c, net.h:
   Fix Debian bug #77685 (dict crashes with "-s regexp sch*".
@@ -2656,7 +2704,7 @@
 
   * daemon.c, dict.c: Fix memory leak and remove limitation on matches.
 
-2000-11-09  faith  <faith at dict.org}
+2000-11-09  faith  <faith@dict.org>
 
   * dict.c: Limit number of matches to print
   Because of the use of a string pool by the argification functions,
@@ -2665,33 +2713,33 @@
 
   * dict.c: Limit number of definitions returned to 100
 
-2000-11-08  faith  <faith at dict.org}
+2000-11-08  faith  <faith@dict.org>
 
   * Makefile.in, dictd.c, dictd.h, servscan.l:
   Apply patches from Bob Hilliard that are in the Debian version.
   The grp.h file may not be portable and should be tested.
   Bump version number to avoid confusion.
 
-2000-05-29  faith  <faith at dict.org}
+2000-05-29  faith  <faith@dict.org>
 
   * daemon.c: Fix MATCH
 
   * Makefile.in: Bump version
 
-2000-01-27  faith  <faith at dict.org}
+2000-01-27  faith  <faith@dict.org>
 
   * Makefile.in: Man page directory fix from weed@DeepThought
 
-1999-12-23  Julian Squires  <tek at wiw.org}
+1999-12-23  Julian Squires  <tek@wiw.org>
 
   * libmaa/maaP.h: Added OpenBSD to list of BSDs to allow smooth compilation.
 
-1999-12-23  faith  <faith at dict.org}
+1999-12-23  faith  <faith@dict.org>
 
   * libmaa/bit.c, libmaa/hash.c, libmaa/hashtest.c, libmaa/listtest.c, libmaa/settest.c:
   Update for 64-bit machines
 
-1999-12-22  faith  <faith at dict.org}
+1999-12-22  faith  <faith@dict.org>
 
   * libmaa/decl.h: Update for Linux/Sparc
 
@@ -2738,13 +2786,13 @@
 
   Also, fix --prefix on configuration
 
-1998-07-06  faith  <faith at dict.org}
+1998-07-06  faith  <faith@dict.org>
 
   * dictzip.1, index.c, data.c, dict.1, dictd.8, dictd.c:
   Removed Linux from man pages
   Added more UNZIP debugging code
 
-1998-07-05  faith  <faith at dict.org}
+1998-07-05  faith  <faith@dict.org>
 
   * libmaa/configure.in:
   Fixed Makefile.in and configure.in syntax per email from Ian T Zimmerman
@@ -2753,7 +2801,7 @@
   Fixed timer wrap-around between 49 and 50 days
   Fixed Makefile.in and configure.in syntax per email from Ian T Zimmerman
 
-1998-03-01  faith  <faith at dict.org}
+1998-03-01  faith  <faith@dict.org>
 
   * dictzip.c, Makefile.in, daemon.c: Fixed typo in daemon.c
   Removed unused variables from dictzip
@@ -2761,11 +2809,11 @@
   * daemon.c, dictzip.c, Makefile.in: Fixed . problem
   Fixed dictzip to conform to man page
 
-1998-02-28  faith  <faith at dict.org}
+1998-02-28  faith  <faith@dict.org>
 
   * dictd.c, Makefile.in: Update for Linux accept(2)
 
-1998-02-22  faith  <faith at dict.org}
+1998-02-22  faith  <faith@dict.org>
 
   * ANNOUNCE: Update ANNOUNCE
 
@@ -2780,11 +2828,11 @@
 
   * Makefile.in, libmaa/maaP.h: Port to BSDI
 
-1998-02-20  faith  <faith at dict.org}
+1998-02-20  faith  <faith@dict.org>
 
   * index.c, daemon.c, Makefile.in: Fixed problem with duplicates
 
-1998-02-16  faith  <faith at dict.org}
+1998-02-16  faith  <faith@dict.org>
 
   * dictd.c, daemon.c, Makefile.in: Fixed startup bug and rate computation
 
@@ -2793,7 +2841,7 @@
   * index.c, dictd.h, dictd.c, dictd.8, dict.h, dict.c, dict.1, TODO, Makefile.in, README, ANNOUNCE:
   Added more features
 
-1998-01-19  faith  <faith at dict.org}
+1998-01-19  faith  <faith@dict.org>
 
   * daemon.c: Updated buffer overflow behavior
 
@@ -2802,7 +2850,7 @@
   * net.c, dictd.h, dictd.c, dict.h, dict.c, daemon.c, clientscan.l, clientparse.y, Makefile.in:
   Added paging feature
 
-1998-01-16  faith  <faith at dict.org}
+1998-01-16  faith  <faith@dict.org>
 
   * decl.h, net.c, libmaa/log.c, libmaa/maaP.h, libmaa/decl.h: Changes for HPUX
 
@@ -2810,7 +2858,7 @@
 
   * decl.h, dictd.c, configure.in: Changes for Solaris (and some DG/UX)
 
-1998-01-05  faith  <faith at dict.org}
+1998-01-05  faith  <faith@dict.org>
 
   * libmaa/maaP.h, libmaa/log.c: Port to DG/UX
 
@@ -2818,7 +2866,7 @@
 
   * libmaa/maaP.h: Port to FreeBSD
 
-1998-01-04  faith  <faith at dict.org}
+1998-01-04  faith  <faith@dict.org>
 
   * ANNOUNCE: Add draft of announcement
 
@@ -2830,33 +2878,33 @@
   Minor updates
   Try all IPs for round-robin DNS entries
 
-1997-11-30  faith  <faith at dict.org}
+1997-11-30  faith  <faith@dict.org>
 
   * libmaa/sl.c: Update for dissertation benchmarks
 
-1997-11-08  faith  <faith at dict.org}
+1997-11-08  faith  <faith@dict.org>
 
   * libmaa/list.c, libmaa/maa.h: This version is buggy, do not check out
 
-1997-09-25  faith  <faith at dict.org}
+1997-09-25  faith  <faith@dict.org>
 
   * libmaa/version.c, libmaa/log.c, libmaa/decl.h:
   Updates for DSL Example under Solaris
 
-1997-09-19  faith  <faith at dict.org}
+1997-09-19  faith  <faith@dict.org>
 
   * libmaa/maaP.h: Fix Solaris predefined macros
 
-1997-09-14  faith  <faith at dict.org}
+1997-09-14  faith  <faith@dict.org>
 
   * libmaa/set.c, libmaa/maa.h: Reimplemented algorithm based on write-up in
   dissertation.  Now using the same algorithm in both places.
 
-1997-09-12  faith  <faith at dict.org}
+1997-09-12  faith  <faith@dict.org>
 
   * libmaa/decl.h, libmaa/configure.in: Preparing DSL example snapshot
 
-1997-09-01  faith  <faith at dict.org}
+1997-09-01  faith  <faith@dict.org>
 
   * dictzip.c, dictzip.1, dictd.8, dict.c, dict.1, TODO, Makefile.in:
   Improved man pages
@@ -2864,28 +2912,28 @@
   * doc/rfc.ms, doc/Makefile.in, example3.conf, dictd.c, dict.c, daemon.c, configure.in:
   Work based on IETF comments
 
-1997-08-26  faith  <faith at dict.org}
+1997-08-26  faith  <faith@dict.org>
 
   * doc/toc.ms, doc/rfc.ms, doc/Makefile.in: Working on draft -02 for IETF
 
-1997-08-21  faith  <faith at dict.org}
+1997-08-21  faith  <faith@dict.org>
 
   * libmaa/maa.h: Got breakpoint tracking and navigation working
 
-1997-08-15  faith  <faith at dict.org}
+1997-08-15  faith  <faith@dict.org>
 
   * libmaa/arg.c: More work on tracking
 
-1997-07-27  faith  <faith at dict.org}
+1997-07-27  faith  <faith@dict.org>
 
   * doc/rfc.ms: Describe form of extensions
 
-1997-07-18  faith  <faith at dict.org}
+1997-07-18  faith  <faith@dict.org>
 
   * doc/security.doc, doc/rfc.ms: Minor RFC changes
   Addition of security-related comments
 
-1997-07-12  faith  <faith at dict.org}
+1997-07-12  faith  <faith@dict.org>
 
   * dict.c: Fixed -I
 
@@ -2902,7 +2950,7 @@
   General cleanup
   Install and dist targets
 
-1997-07-11  faith  <faith at dict.org}
+1997-07-11  faith  <faith@dict.org>
 
   * libmaa/error.c: Allow routine name to be NULL
 
@@ -2915,30 +2963,30 @@
   Cleaned up Makefiles
   More client bug fixes
 
-1997-07-09  faith  <faith at dict.org}
+1997-07-09  faith  <faith@dict.org>
 
   * net.c, dictzip.c, dictd.c, dict.h, dict.c, dict.1, daemon.c:
   More work on client
 
-1997-07-08  faith  <faith at dict.org}
+1997-07-08  faith  <faith@dict.org>
 
   * doc/rfc.ms, net.c, dictd.8, dict.h, dict.c, dict.1, daemon.c:
   Work on client
 
-1997-07-07  faith  <faith at dict.org}
+1997-07-07  faith  <faith@dict.org>
 
   * doc/rfc.ms, example3.conf, dictd.c: Fixed proctitles on SunOS
 
   * libmaa/timer.c:
   Use millisecond resolution for timer, instead of microseconds
 
-1997-06-28  faith  <faith at dict.org}
+1997-06-28  faith  <faith@dict.org>
 
   * dictzip.1: dictzip documentation
 
   * doc/rfc.ms: Final revisions
 
-1997-06-23  faith  <faith at dict.org}
+1997-06-23  faith  <faith@dict.org>
 
   * index.c, config: Fixed BMH string matching (again)
 
@@ -2947,7 +2995,7 @@
 
   * libmaa/timer.c: Made timers return parent and children times
 
-1997-06-21  faith  <faith at dict.org}
+1997-06-21  faith  <faith@dict.org>
 
   * index.c, dictd.h, dictd.c, dictd.8, daemon.c:
   Work on logging and documentation
@@ -2956,16 +3004,16 @@
   Made timestamps on logs optional
   Fixed typos
 
-1997-06-11  faith  <faith at dict.org}
+1997-06-11  faith  <faith@dict.org>
 
   * doc/rfc.ms, index.c, example.conf, dictd.h, dictd.c, dictd.8:
   More work on RFC
 
-1997-06-03  faith  <faith at dict.org}
+1997-06-03  faith  <faith@dict.org>
 
   * dictd.c: Zero memory before use
 
-1997-06-02  faith  <faith at dict.org}
+1997-06-02  faith  <faith@dict.org>
 
   * libmaa/version.c, libmaa/parse.c, libmaa/configure.in:
   Only make weak symbols when compiling a shared library.
@@ -2976,7 +3024,7 @@
 
   * doc/rfc.ms, doc/Makefile.in, dict.html: More work on document
 
-1997-05-27  faith  <faith at dict.org}
+1997-05-27  faith  <faith@dict.org>
 
   * doc/rfc.ms, doc/Makefile.in, servparse.y, servscan.l, index.c, example.site, dictd.h, example.conf, dictd.c, dict.c, daemon.c, configure.in, codes.h:
   Made daemon conform to 26May RFC draft
@@ -2990,16 +3038,16 @@
   Added pipelining section.
   Added comments about virtual databases.
 
-1997-05-26  faith  <faith at dict.org}
+1997-05-26  faith  <faith@dict.org>
 
   * doc/rfc.sh: Formfee dconverter
 
-1997-05-22  faith  <faith at dict.org}
+1997-05-22  faith  <faith@dict.org>
 
   * servscan.l, servparse.y, dictd.h, example2.conf, dictd.c, daemon.c:
   Persistent daemon clean up
 
-1997-05-21  faith  <faith at dict.org}
+1997-05-21  faith  <faith@dict.org>
 
   * libmaa/Makefile.in: Fixed ChangeLog target
 
@@ -3012,35 +3060,35 @@
 
   * libmaa/version.c: Bump version
 
-1997-05-20  faith  <faith at dict.org}
+1997-05-20  faith  <faith@dict.org>
 
   * libmaa/string.c, libmaa/maa.h, libmaa/hash.c: Added hash function caching
   Added str_copy* support for strings which are known to be unque
   (e.g., source lines).
   Both of these changes should speed up scanning and parsing.
 
-1997-05-10  faith  <faith at dict.org}
+1997-05-10  faith  <faith@dict.org>
 
   * libmaa/source.c: Fixed core dump when sourceType is not available
 
-1997-05-09  faith  <faith at dict.org}
+1997-05-09  faith  <faith@dict.org>
 
   * doc/rfc.ms: More work on RFC
 
-1997-05-07  faith  <faith at dict.org}
+1997-05-07  faith  <faith@dict.org>
 
   * doc/rfc.ms: Remove mention of URL
 
-1997-05-02  faith  <faith at dict.org}
+1997-05-02  faith  <faith@dict.org>
 
   * dictd.h, dictd.c, dict.c, daemon.c, config.h.in, configure.in, codes.h, Makefile.conf:
   Initial experiment with persistent daemons
 
-1997-05-01  faith  <faith at dict.org}
+1997-05-01  faith  <faith@dict.org>
 
   * libmaa/argtest.out, libmaa/argtest.c, libmaa/arg.c: Fix arg_argify, again
 
-1997-04-30  faith  <faith at dict.org}
+1997-04-30  faith  <faith@dict.org>
 
   * doc/rfc.ms: More changes from Bret
 
@@ -3048,48 +3096,48 @@
   Start on client
   Fix up socket I/O
 
-1997-04-26  faith  <faith at dict.org}
+1997-04-26  faith  <faith@dict.org>
 
   * doc/rfc.ms: Minor revisions
 
-1997-04-22  faith  <faith at dict.org}
+1997-04-22  faith  <faith@dict.org>
 
   * doc/rfc.ms: Bret's initial additions and changes
 
-1997-04-21  faith  <faith at dict.org}
+1997-04-21  faith  <faith@dict.org>
 
   * libmaa/version.c, libmaa/set.c, libmaa/maa.h, libmaa/list.c, libmaa/Makefile.in:
   Keep version numbers from automatically bouncing.
   Make remaining iterators return non-zero if the iteration ended early.
 
-1997-04-03  faith  <faith at dict.org}
+1997-04-03  faith  <faith@dict.org>
 
   * servscan.l, servparse.y, net.c, md5.h, md5.c, index.c, example.conf, dictd.h, dictd.c, daemon.c, Makefile.in:
   Finished initial implementation of new protocol
 
   * doc/rfc.ms: More changes
 
-1997-03-31  faith  <faith at dict.org}
+1997-03-31  faith  <faith@dict.org>
 
   * doc/rfc.ms, net.h, net.c, dictd.h, dictd.c, dict.c, daemon.c, Makefile.in:
   Moving toward new protocol
 
-1997-03-26  faith  <faith at dict.org}
+1997-03-26  faith  <faith@dict.org>
 
   * dictzip.h, dictd.h, dictd.c, daemon.c: Moving toward new protocol
 
   * doc/rfc.ms: RFC-like document
 
-1997-03-23  faith  <faith at dict.org}
+1997-03-23  faith  <faith@dict.org>
 
   * net.c, example.conf, dictd.c, dictzip.c, data.c, daemon.c: Tweaking
 
-1997-03-19  faith  <faith at dict.org}
+1997-03-19  faith  <faith@dict.org>
 
   * libmaa/version.c, libmaa/source.c, libmaa/argtest.out, libmaa/maa.h, libmaa/pr.c, libmaa/arg.c, libmaa/argtest.c:
   Allow arg_argify to quote in different ways.
 
-1997-03-18  faith  <faith at dict.org}
+1997-03-18  faith  <faith@dict.org>
 
   * libmaa/version.c, libmaa/source.c:
   Increased buffer size for error reporting
@@ -3097,7 +3145,7 @@
   * libmaa/version.c, libmaa/parse.c, libmaa/maa.h:
   Added new parser entry point
 
-1997-03-15  faith  <faith at dict.org}
+1997-03-15  faith  <faith@dict.org>
 
   * libmaa/version.c, libmaa/sl.c: Finished implementing Algorithms 1-6
   Wrote up algorithm descriptions
@@ -3130,7 +3178,7 @@
   %     22067 nodes have been labelled (349455 relabelled, 662227 needs comp.)
   %     11.910u 0.180s 14.250 84%
 
-1997-03-13  faith  <faith at dict.org}
+1997-03-13  faith  <faith@dict.org>
 
   * libmaa/version.c: Added -a option to select fast labeling algorithms
   Implemented Algorithm 0, 1, 2, noting speed improvement
@@ -3141,7 +3189,7 @@
   Fixed up daemon code
   Fiddled with search algorithms a bit
 
-1997-03-12  faith  <faith at dict.org}
+1997-03-12  faith  <faith@dict.org>
 
   * index.c, net.c, dictd.c, decl.h, daemon.c, Makefile.in:
   Made status report elapsed times for previous command
@@ -3152,14 +3200,14 @@
   Improved logging
   Added more C prototypes for SunOS
 
-1997-03-11  faith  <faith at dict.org}
+1997-03-11  faith  <faith@dict.org>
 
   * net.h, net.c, dictd.h, index.c, dictd.c, Makefile.in, daemon.c:
   Added regexp matching, fixed logging
 
   * libmaa/version.c, libmaa/log.c: Fixed log_stream bug
 
-1997-03-10  faith  <faith at dict.org}
+1997-03-10  faith  <faith@dict.org>
 
   * net.h, servparse.y, net.c, dictd.h, index.c, dictd.c, dictd.8, data.c, dictP.h, daemon.c, configure.in, Makefile.in, TODO, COPYING:
   More work
@@ -3168,12 +3216,12 @@
   Fixed bug in arg parsing
   Added generalized logging capabilities
 
-1997-03-09  faith  <faith at dict.org}
+1997-03-09  faith  <faith@dict.org>
 
   * example.conf, index.c, dictd.h, dictzip.h, dictd.c:
   Performance enhancements
 
-1997-03-08  faith  <faith at dict.org}
+1997-03-08  faith  <faith@dict.org>
 
   * example.conf, servscan.l, configure.in, data.c, Makefile.in:
   Finish SunOS port
@@ -3187,14 +3235,14 @@
   Updated arg functions to skip over whitespace in a reasonable way.\
   Updated argtest to test these updates.
 
-1997-03-07  faith  <faith at dict.org}
+1997-03-07  faith  <faith@dict.org>
 
   * search.c, index.c, look.c, dictd.c, dictd.h, configure.in, servscan.l, wndump.c, jargdump.c, net.c, servparse.y, dictzip.c, dictzip.h, dictrc.sample, dictP.h, decl.h, dict.h, daemon.c, data.c, config.sub, Makefile.in:
   Reorganization for better packaging
 
   * servparse.y, dictd.c, daemon.c: Port to SunOS
 
-1997-03-01  faith  <faith at dict.org}
+1997-03-01  faith  <faith@dict.org>
 
   * index.c, dictzip.c, dictd.c, data.c, daemon.c: Updates for SunOS
 
@@ -3206,7 +3254,7 @@
   * libmaa/version.c, libmaa/timer.c, libmaa/source.c, libmaa/parse.c, libmaa/maa.h:
   Fixed bugs in timer and error routines
 
-1997-02-28  faith  <faith at dict.org}
+1997-02-28  faith  <faith@dict.org>
 
   * libmaa/doc/Makefile.in, libmaa/version.c:
   Removed parse and source support from Khepera library
@@ -3218,19 +3266,19 @@
 
   * doc/design.tex: More documentation
 
-1997-02-27  faith  <faith at dict.org}
+1997-02-27  faith  <faith@dict.org>
 
   * doc/webster.out, doc/design.tex: Add doc directory
 
-1997-02-21  faith  <faith at dict.org}
+1997-02-21  faith  <faith@dict.org>
 
   * libmaa/README: Updated credits information and version
 
-1997-02-08  faith  <faith at dict.org}
+1997-02-08  faith  <faith@dict.org>
 
   * libmaa/version.c: Fix typos
 
-1996-12-26  faith  <faith at dict.org}
+1996-12-26  faith  <faith@dict.org>
 
   * libmaa/version.c:
   1) Make top-level "tests" target to run all regression tests.
@@ -3238,7 +3286,7 @@
   3) Add .dq debugging flag to debug the pending delete queue.
   4) Fix typo that prevented -pg from working (this was most important).
 
-1996-12-25  faith  <faith at dict.org}
+1996-12-25  faith  <faith@dict.org>
 
   * libmaa/version.c:
   1) Re-did all the Range stuff again.  Here is how it works:
@@ -3278,7 +3326,7 @@
      error of printing -- the types were correctly stored as differentiated
      variables.)
 
-1996-12-23  faith  <faith at dict.org}
+1996-12-23  faith  <faith@dict.org>
 
   * libmaa/version.c:
   1) Get insert/extract working.  For type checking, there is now a callback
@@ -3303,7 +3351,7 @@
   Next, figure out how to type check indexing.  Was the type system designed
   to handle this?
 
-1996-12-22  faith  <faith at dict.org}
+1996-12-22  faith  <faith@dict.org>
 
   * libmaa/version.c:
   1) Removed some calls to fixup_scopes() since these should no longer be
@@ -3328,7 +3376,7 @@
   still makes use of the type inference engine, it just bypasses the
   arithmetic type clauses.
 
-1996-12-14  faith  <faith at dict.org}
+1996-12-14  faith  <faith@dict.org>
 
   * libmaa/version.c: 1) Changed spacing of ChangeLog
   2) Re-wrote let flattening (Palmer96 Rule1).  But still need to fixup
@@ -3348,7 +3396,7 @@
 
   Still working on let scoping debugging.
 
-1996-12-09  faith  <faith at dict.org}
+1996-12-09  faith  <faith@dict.org>
 
   * libmaa/Makefile.in: Fix ChangeLog creation
 
@@ -3356,7 +3404,7 @@
   Added dist target to makefile
   Fixed perl script to work under Perl 5
 
-1996-12-07  faith  <faith at dict.org}
+1996-12-07  faith  <faith@dict.org>
 
   * libmaa/version.c:
   1) Temporarily removed FORTRAN transformations from build.  They need to be
@@ -3380,7 +3428,7 @@
 
   Tomorrow: get qsort to compile as well.
 
-1996-12-01  faith  <faith at dict.org}
+1996-12-01  faith  <faith@dict.org>
 
   * libmaa/version.c: Added query and if-then-else simplification.
 
@@ -3390,7 +3438,7 @@
   hack it so that it won't print warnings for Proteus code.  For now, just
   redirect errors to /dev/null.
 
-1996-11-26  faith  <faith at dict.org}
+1996-11-26  faith  <faith@dict.org>
 
   * libmaa/version.c, libmaa/error.c:
   1) Added simplify.k and moved all the simplifications there.
@@ -3421,7 +3469,7 @@
      decalred.  This should all be done with typechecking, and will be in the
      next re-write of the Khepera language compiler :)
 
-1996-11-23  faith  <faith at dict.org}
+1996-11-23  faith  <faith@dict.org>
 
   * libmaa/version.c:
   1) Make add_primed_func_defns propagate the return type as well as the
@@ -3446,7 +3494,7 @@
   going to work on function call parameter lifting next, and then on last-use
   detection so that DPL memory management can be added....
 
-1996-11-19  faith  <faith at dict.org}
+1996-11-19  faith  <faith@dict.org>
 
   * libmaa/version.c:
   1) Finally got Palmer96 rules 1-5 implemented.  There are a few problems:
@@ -3481,11 +3529,11 @@
      possible.  It isn't right now if you aren't walking from the root of the
      labeled tree.
 
-1996-11-15  faith  <faith at dict.org}
+1996-11-15  faith  <faith@dict.org>
 
   * libmaa/version.c: New example
 
-1996-11-11  faith  <faith at dict.org}
+1996-11-11  faith  <faith@dict.org>
 
   * libmaa/version.c, libmaa/maa.c:
   Broke out type dumping routines (for debugging with readable types).
@@ -3515,7 +3563,7 @@
      the type has to be most (all?) of the time).
   todo) work on -fflatten and -fsimple, especially for if statements
 
-1996-11-10  faith  <faith at dict.org}
+1996-11-10  faith  <faith@dict.org>
 
   * libmaa/version.c, libmaa/memory.c, libmaa/maa.h, libmaa/basetest.c, libmaa/basetest.out, libmaa/base64.c, libmaa/base26.c, libmaa/Makefile.in:
   1) Fixed up name mangling for multi-arity types.
@@ -3561,7 +3609,7 @@
 
   * libmaa/version.c: Recursive typechecking works.  Joy.
 
-1996-11-08  faith  <faith at dict.org}
+1996-11-08  faith  <faith@dict.org>
 
   * libmaa/version.c: Recursive functions do _not_ typecheck.  Fuck.
   Made automatic function name mangling work for variable-argument functions.
@@ -3569,7 +3617,7 @@
   Make ground matching work (e.g., (N_Node 0) matches N_Node without
   any children) in Khephera language.
 
-1996-11-04  faith  <faith at dict.org}
+1996-11-04  faith  <faith@dict.org>
 
   * libmaa/version.c: Fixed pp_* so that default printing styles works.
   Added a bunch of dpl_* primitives.
@@ -3581,17 +3629,17 @@
   Made 'else' actually work in Khepera if clauses.  Previously the else
      clause was executed along with the then clause.
 
-1996-11-02  faith  <faith at dict.org}
+1996-11-02  faith  <faith@dict.org>
 
   * libmaa/version.c: Starting to add primitive dpl_mul-like operations.
 
-1996-10-31  faith  <faith at dict.org}
+1996-10-31  faith  <faith@dict.org>
 
   * libmaa/version.c: Added dpl_build_*
   Added ability to use .. (sametypes) wildcard in var declaration
     (this is essential to be able to type dpl_build_*)
 
-1996-10-30  faith  <faith at dict.org}
+1996-10-30  faith  <faith@dict.org>
 
   * libmaa/version.c, libmaa/config.sub:
   Added topl.c and pl.k for transformations to a generic parallel library
@@ -3602,15 +3650,15 @@
      selective (e.g., for debugging)
   Fixed bug where a poiner from alloca was used as a symbol name
 
-1996-10-10  faith  <faith at dict.org}
+1996-10-10  faith  <faith@dict.org>
 
   * search.c, dict.h, dictzip.c, Makefile.in: Work on searching
 
-1996-10-07  faith  <faith at dict.org}
+1996-10-07  faith  <faith@dict.org>
 
   * libmaa/maaP.h, libmaa/version.c: Changes for Solaris cc compiler
 
-1996-10-03  faith  <faith at dict.org}
+1996-10-03  faith  <faith@dict.org>
 
   * libmaa/prtest.out, libmaa/version.c, libmaa/Makefile.in:
   Added -with-nox option to inhibit building X applications
@@ -3626,22 +3674,22 @@
   still aren't handled in a POSIX way, and deaths of children aren't caught
   asynchronously, so support can still be made better.
 
-1996-10-02  faith  <faith at dict.org}
+1996-10-02  faith  <faith@dict.org>
 
   * libmaa/pr.c: Before ripping out stream I/O
 
-1996-09-30  faith  <faith at dict.org}
+1996-09-30  faith  <faith@dict.org>
 
   * dictzip.c, Makefile.in, dict.h:
   Got random access reads on compressed file working.
 
   * libmaa/version.c, libmaa/error.c: Make error messages prettier
 
-1996-09-29  faith  <faith at dict.org}
+1996-09-29  faith  <faith@dict.org>
 
   * dictzip.c: Update Id string
 
-1996-09-26  faith  <faith at dict.org}
+1996-09-26  faith  <faith@dict.org>
 
   * wndump.c, install-sh, jargdump.c, fmt.h, dictzip.c, fmt.c, dict.h, config.sub, configure.in, config.h.in, config.guess, Makefile, Makefile.in:
   General work on formatting and use with configure.
@@ -3649,7 +3697,7 @@
   * libmaa/version.c, libmaa/maa.h, libmaa/pr.c, libmaa/base64.c:
   Work on base64 and process management
 
-1996-09-25  faith  <faith at dict.org}
+1996-09-25  faith  <faith@dict.org>
 
   * libmaa/version.c, libmaa/hash.c, libmaa/maaP.h, libmaa/decl.h:
   Finish Solaris port
@@ -3673,7 +3721,7 @@
   * libmaa/config.guess: Make sure all library functions are under LGPL
   Update configure support from autoconf-2.10
 
-1996-09-24  faith  <faith at dict.org}
+1996-09-24  faith  <faith@dict.org>
 
   * wndump.c, output.c, fmt.c, fmt.h, encode.c, engine.c, dictzip.c, decode.c.save, compressdict.c, decode.c, compressdict.1, compress2.c, compress3.c, buildindex.c, COPYING.look, buildindex.1, COPYING:
   Move to version 2.0
@@ -3682,7 +3730,7 @@
   Added base64 routines
   Fixed warnings generated under Linux
 
-1996-09-23  faith  <faith at dict.org}
+1996-09-23  faith  <faith@dict.org>
 
   * libmaa/xmalloc.c, libmaa/stringtest.c, libmaa/timer.c, libmaa/string.c, libmaa/sl.c, libmaa/strdup.c, libmaa/settest.c, libmaa/set.c, libmaa/prime.c, libmaa/primetest.c, libmaa/listtest.c, libmaa/list.c, libmaa/error.c, libmaa/debugtest.c, libmaa/decl.h, libmaa/debug.c, libmaa/bit.c, libmaa/Makefile.in, libmaa/COPYING.LIB, libmaa/COPYING:
   Make sure all library routines are under GNU LGPL.

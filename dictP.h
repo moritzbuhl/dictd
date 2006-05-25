@@ -19,7 +19,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: dictP.h,v 1.24 2005/12/05 17:21:20 cheusov Exp $
+ * $Id: dictP.h,v 1.27 2006/05/06 08:53:51 cheusov Exp $
  * 
  */
 
@@ -52,7 +52,7 @@
 #endif
 
 /* AIX requires this to be the first thing in the file.  */
-#if defined(__svr4__) && defined(__sgi__) && !HAVE_ALLOCA_H /* IRIX */
+#if defined(__IRIX__) && defined(__sgi__) && !HAVE_ALLOCA_H
 # undef HAVE_ALLOCA_H
 # define HAVE_ALLOCA_H 1
 #endif
@@ -64,11 +64,9 @@
 #ifndef HAVE_ALLOCA
 # ifndef alloca /* predefined by HP cc +Olibcalls */
 #  ifdef _AIX
-#   pragma alloca
+#    pragma alloca
 #  else
-#   if !defined(__svr4__) && !defined(__sgi__)	/* not on IRIX */
      void *alloca(size_t size);
-#   endif
 #  endif
 # endif
 #endif
@@ -110,6 +108,10 @@ extern unsigned long int strtoul( const char *, char **, int );
 
 #if !HAVE_SNPRINTF
 extern int snprintf(char *str, size_t size, const char *format, ...);
+#endif
+
+#if !HAVE_DAEMON
+extern int daemon(int nochdir, int noclose);
 #endif
 
 #if !HAVE_VSNPRINTF
@@ -306,11 +308,6 @@ extern void     srandom( unsigned int );
 #ifdef HAVE_MMAP
 #include <sys/mman.h>
 #endif
-
-/* System dependent declarations: Many brain damaged systems don't provide
-declarations for standard library calls.  We provide them here for
-situations that we know about. */
-#include "decl.h"
 
 #if HAVE_LIMITS_H
 #include <limits.h>
