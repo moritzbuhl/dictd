@@ -1,4 +1,55 @@
+2006-07-03  cheusov  <vle@gmx.net>
+
+  * libmaa/configure.in: 0.99 ---> 1.990
+
+  * NEWS: additions to 1.10.6 release
+
+  * configure.in:
+  removed: code that does not work with BSD 'which'
+  1.10.5 ---> 1.10.6
+
+  * dictd.c: removed: unnecessary code
+
+2006-06-23  cheusov  <vle@gmx.net>
+
+  * test/dictd_test: nothing
+
+  * test/dictd_cyrillic_1_res.expected.txt, test/dictd_test:
+  Not only 'exact' search strategy is tested now.
+
+  * index.c:
+  fixed: 'word' strategy works incorrectly on OpenBSD and probably others
+      because of incorrect isspacepuncttab array initizlization.
+
+  * test/dictd_cyrillic_1_res.expected.txt, test/dictd_test:
+  all search strategies are tested
+
+  * test/dictd_cyrillic_1_res.expected.txt, test/dictd_hello_1_res.expected.txt, test/dictd_hello_2_res.expected.txt, test/dictd_hello_3_res.expected.txt, test/dictd_hello_4_res.expected.txt, test/dictd_hello_5_res.expected.txt, test/dictd_smiley_2_res.expected.txt, test/dictd_smiley_4_res.expected.txt, test/dictd_smiley_5_res.expected.txt, test/dictd_test:
+  minor fixes
+
+2006-06-22  cheusov  <vle@gmx.net>
+
+  * test/db.expect.cyrillic_1.dict, test/db.expect.cyrillic_1.index, test/dictd_cyrillic_1_res.expected.txt, test/dictd_hello_1_res.expected.txt, test/dictd_hello_2_res.expected.txt, test/dictd_hello_3_res.expected.txt, test/dictd_hello_4_res.expected.txt, test/dictd_hello_5_res.expected.txt, test/dictd_smiley_2_res.expected.txt, test/dictd_smiley_4_res.expected.txt, test/dictd_smiley_5_res.expected.txt, test/dictd_test, test/testdb.cyrillic.txt, test/testdb.cyrillic_1.conf:
+  a few new tests, fixes, improvements
+
+  * test/dictd_smiley_1_res.expected.txt, test/dictd_smiley_3_res.expected.txt, test/dictd_test:
+  removed: too big files from testing
+
+2006-05-27  cheusov  <vle@gmx.net>
+
+  * dictd.c, dictfmt.1.in, dictfmt.c, dictunformat, index.c, libmaa/base64.c, libmaa/maa.h:
+  added: b64_decode_buf function to libmaa library
+  index.c:dict_word_create: minor speed-ups, avoided use of malloc()
+  dictfmt --index-keep-orig create (if necessary) fourth column
+      in .index file that keeps original headword which is returned
+      by MATCH command. See dictfmt.1 for details.
+  dictd: If opening a pid file of log file failed, error messages are printed
+      to stderr.
+
 2006-05-26  cheusov  <vle@gmx.net>
+
+  * libmaa/hash.c:
+  FIXED: sf.net bug #1463396
 
   * Makefile.in: make --> $(MAKE)
 

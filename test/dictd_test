@@ -79,12 +79,17 @@ dictfmt_diff_opts '4' hello --utf8 --allchars --without-headword \
 dictfmt_diff_opts '5' hello --utf8 --allchars --without-headword \
    --columns 15 --default-strategy lev --without-info -c5
 
+# UTF-8 database (mostly cyrillic)
+dictfmt_diff_opts '1' cyrillic --utf8 -c5 -s 'rus words' \
+   -u 'URL here' --default-strategy word
+
 ##################################################
 ##################################################
 echo '                       DICTD!!!'
 
 generate_commands (){
     conf_file=$1
+    shift
 
     strats=`echo 'show strat' |
 	$DICTD -i -c $conf_file |
@@ -94,43 +99,50 @@ generate_commands (){
     fi
 
 #    echo "strats=$strats" 1>&2
-    strats="exact"
+#    strats="exact prefix suffix substring"
+    if test $# = 0; then
+	strats=exact
+    else
+	strats="$@"
+    fi
 
     awk -v strats="$strats" '
     BEGIN {
-	split(strats, strats_arr)
+	cnt=split(strats, strats_arr)
     }
     {
-	print "define \ttestdb\t \"" $0 "\""
-	print "define\ttestdb " $0
+	printf "define \ttestdb\t \"%s\"\n", $0
+	printf "define testdb \"%s\"\n", $0
 
-	for (i in strats_arr){
-	    printf "match\ttestdb %s\t%s\n", strats_arr [i], $0
+	for (i=1; i <= cnt; ++i){
+	    printf "match\ttestdb %s\t\"%s\"\n", strats_arr [i], $0
 	}
     }'
 }
 
 dictd_test_inetd (){
     dbtype=$1
+    shift
+
     conf_file=_testdb.$dbtype.conf
 
     m4 -DCURR_DIR=`pwd` testdb.$dbtype.conf >$conf_file || exit 1
 
     index_file=`sed -n 's,^.*/\(.*[.]index\).*$,\1,p' $conf_file`
 
-    cut -f 1 "$index_file" | generate_commands $conf_file |
+    cut -f 1 "$index_file" | generate_commands $conf_file "$@" |
     $DICTD -c $conf_file -i |
     awk '/^2[25]0 / { print $1; next; } {print}' \
 	> _dictd_${dbtype}_res.txt || exit 1
     $DIFF dictd_${dbtype}_res.expected.txt _dictd_${dbtype}_res.txt || exit 1
 }
 
-dictd_test_inetd smiley_1
-printf 'smiley_1 passed\n'
+#dictd_test_inetd smiley_1
+#printf 'smiley_1 passed\n'
 dictd_test_inetd smiley_2
 printf 'smiley_2 passed\n'
-dictd_test_inetd smiley_3
-printf 'smiley_3 passed\n'
+#dictd_test_inetd smiley_3
+#printf 'smiley_3 passed\n'
 dictd_test_inetd smiley_4
 printf 'smiley_4 passed\n'
 dictd_test_inetd smiley_5
@@ -146,3 +158,6 @@ dictd_test_inetd hello_4
 printf 'hello_4 passed\n'
 dictd_test_inetd hello_5
 printf 'hello_5 passed\n'
+
+dictd_test_inetd cyrillic_1 exact word lev suffix prefix substring
+printf 'cyrillic_1 passed\n'
