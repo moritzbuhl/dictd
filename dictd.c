@@ -17,7 +17,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: dictd.c,v 1.131 2006/07/03 21:54:13 cheusov Exp $
+ * $Id: dictd.c,v 1.133 2006/07/14 21:28:00 cheusov Exp $
  * 
  */
 
@@ -1121,7 +1121,7 @@ const char *dict_get_banner( int shortFlag )
 {
    static char    *shortBuffer = NULL;
    static char    *longBuffer = NULL;
-   const char     *id = "$Id: dictd.c,v 1.131 2006/07/03 21:54:13 cheusov Exp $";
+   const char     *id = "$Id: dictd.c,v 1.133 2006/07/14 21:28:00 cheusov Exp $";
    struct utsname uts;
    
    if (shortFlag && shortBuffer) return shortBuffer;
@@ -1576,19 +1576,25 @@ static void dict_test_show_info (const char *database)
    exit (0);
 }
 
-static void create_pid_file ()
-{
-   FILE *fd = fopen (pidFile, "w");
+FILE *pid_fd = NULL;
 
-   if (!fd){
+static void pid_file_create ()
+{
+   pid_fd = fopen (pidFile, "w");
+
+   if (!pid_fd){
       log_info(":E: cannot open pid file '%s'\n:E:    err msg: %s\n",
 	       pidFile, strerror (errno));
       err_fatal(__FUNCTION__,
 		":E: terminating due to errors. See log file\n");
    }
+}
 
-   fprintf (fd, "%lu\n", (unsigned long) getpid ());
-   if (fclose (fd)){
+static void pid_file_write ()
+{
+   if (-1 == fprintf (pid_fd, "%lu\n", (unsigned long) getpid ()) ||
+       fclose (pid_fd))
+   {
       log_info(":E: cannot write to pid file '%s'\n:E:    err msg: %s\n",
 	       pidFile, strerror (errno));
       err_fatal(__FUNCTION__,
@@ -1830,7 +1836,8 @@ int main (int argc, char **argv, char **envp)
       postprocess_filenames (DictConfig);
    }
 
-   if (detach) create_pid_file ();
+   if (detach) pid_file_create (); /* before leaving root priviledges */
+
    release_root_privileges();
 
    if (logFile)   log_file ("dictd", logFile);
@@ -1841,8 +1848,11 @@ int main (int argc, char **argv, char **envp)
       set_minimal();
 
    if (detach){
-     /* become a daemon */
+      /* become a daemon */
       daemon (0, 0);
+
+      /* after fork from daemon(3) */
+      pid_file_write ();
    }
 
    time(&startTime);
@@ -1914,11 +1924,14 @@ int main (int argc, char **argv, char **envp)
 			 dict_get_banner(1),
 			 _dict_forks - _dict_reaps,
 			 _dict_forks );
+
       if (flg_test(LOG_SERVER))
          log_info( ":I: %d accepting on %s\n", getpid(), daemon_service );
       if ((childSocket = accept(masterSocket,
-				(struct sockaddr *)&csin, &alen)) < 0) {
-	 if (errno == EINTR){
+				(struct sockaddr *)&csin, &alen)) < 0)
+      {
+	 switch (errno){
+	 case EINTR:
 	    if (need_reload_config){
 	       reload_config ();
 	       need_reload_config = 0;
@@ -1931,20 +1944,17 @@ int main (int argc, char **argv, char **envp)
 	       databases_unloaded = 1;
 	    }
 	    continue;
+	 case ECONNABORTED:
+	 case ECONNRESET:
+	 case ETIMEDOUT:
+	 case EHOSTUNREACH:
+	 case ENETUNREACH:
+	    continue;
+	 default:
+	    log_info (":E: can't accept: errno = %d: %s\n",
+		      errno, strerror (errno));
+	    err_fatal_errno (__FUNCTION__, ":E: can't accept");
 	 }
-
-#ifdef __linux__
-				/* Linux seems to return more types of
-                                   errors than other OSs. */
-	 if (errno == ETIMEDOUT
-	     || errno == ECONNRESET
-	     || errno == EHOSTUNREACH
-	     || errno == ENETUNREACH) continue;
-	 log_info( ":E: can't accept: errno = %d: %s\n",
-		   errno, strerror(errno) );
-#else
-	 err_fatal_errno( __FUNCTION__, ":E: can't accept" );
-#endif
       }
 
       if (_dict_daemon || dbg_test(DBG_NOFORK)) {
