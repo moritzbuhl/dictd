@@ -17,7 +17,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * $Id: dictd.c,v 1.133 2006/07/14 21:28:00 cheusov Exp $
+ * $Id: dictd.c,v 1.136 2006/12/12 21:20:22 cheusov Exp $
  * 
  */
 
@@ -38,6 +38,8 @@
 #include <pwd.h>                /* getpwuid */
 #include <locale.h>             /* setlocale */
 #include <ctype.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #define MAXPROCTITLE 2048       /* Maximum amount of proc title we'll use. */
 #undef MIN
@@ -1121,7 +1123,7 @@ const char *dict_get_banner( int shortFlag )
 {
    static char    *shortBuffer = NULL;
    static char    *longBuffer = NULL;
-   const char     *id = "$Id: dictd.c,v 1.133 2006/07/14 21:28:00 cheusov Exp $";
+   const char     *id = "$Id: dictd.c,v 1.136 2006/12/12 21:20:22 cheusov Exp $";
    struct utsname uts;
    
    if (shortFlag && shortBuffer) return shortBuffer;
@@ -1222,11 +1224,12 @@ static void help( void )
 "   --test-nooutput              produces no output",
 "   --test-idle                  does everything except search",
 "   --test-show-info <database>  shows information about specified database",
-"   --fast-start                 don't create additional index.",
+"   --fast-start                 don't create additional (internal) index.",
 #ifdef HAVE_MMAP
 "   --without-mmap               do not use mmap() function and load files\n\
                                 into memory instead.",
 #endif
+"   --stdin2stdout               copy stdin to stdout (addition to -i option).",
       0 };
    const char        **p = help_msg;
 
@@ -1602,6 +1605,21 @@ static void pid_file_write ()
    }
 }
 
+void reopen_012 (void)
+{
+   int fd = open ("/dev/null", O_RDWR);
+   if (fd == -1)
+      err_fatal_errno (__FUNCTION__, ":E: can't open /dev/null");
+
+   close (0);
+   close (1);
+   close (2);
+
+   dup (fd);
+   dup (fd);
+   dup (fd);
+}
+
 int main (int argc, char **argv, char **envp)
 {
    int                childSocket;
@@ -1663,6 +1681,7 @@ int main (int argc, char **argv, char **envp)
       { "listen-to",        1, 0, 519 },
       { "test-show-info",   1, 0, 520 },
       { "pid-file",         1, 0, 521 },
+      { "stdin2stdout",     0, 0, 522 },
       { 0,                  0, 0, 0  }
    };
 
@@ -1802,6 +1821,9 @@ int main (int argc, char **argv, char **envp)
 	 pidFile     = str_copy(optarg);
 	 pidFile_set = 1;
 	 break;
+      case 522:
+	 stdin2stdout_mode = 1;
+	 break;
       case 'h':
       default:  help(); exit(0);                          break;
       }
@@ -1849,7 +1871,8 @@ int main (int argc, char **argv, char **envp)
 
    if (detach){
       /* become a daemon */
-      daemon (0, 0);
+      daemon (0, 1);
+      reopen_012 ();
 
       /* after fork from daemon(3) */
       pid_file_write ();
