@@ -16,9 +16,6 @@
  * You should have received a copy of the GNU General Public License along
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
- * 
- * $Id: dictd.c,v 1.136 2006/12/12 21:20:22 cheusov Exp $
- * 
  */
 
 #include "dictd.h"
@@ -81,8 +78,13 @@ int pidFile_set; /* 1 if set by command line option */
 const char         *daemon_service     = DICT_DEFAULT_SERVICE;
 int daemon_service_set; /* 1 if set by command line option */
 
-int        _dict_daemon_limit        = DICT_DAEMON_LIMIT;
-int _dict_daemon_limit_set; /* 1 if set by command line option */
+int _dict_daemon_limit_childs   = DICT_DAEMON_LIMIT_CHILDS;
+int _dict_daemon_limit_childs_set; /* 1 if set by command line option */
+
+int        _dict_daemon_limit_matches  = DICT_DAEMON_LIMIT_MATCHES;
+int        _dict_daemon_limit_defs     = DICT_DAEMON_LIMIT_DEFS;
+int        _dict_daemon_limit_time     = DICT_DAEMON_LIMIT_TIME;
+int        _dict_daemon_limit_queries  = DICT_DAEMON_LIMIT_QUERIES;
 
 int        _dict_markTime = 0;
 int _dict_markTime_set; /* 1 if set by command line option */
@@ -104,7 +106,13 @@ const char        *preprocessor = NULL;
 const char        *bind_to      = NULL;
 int bind_to_set; /* 1 if set by command line option */
 
-
+/* information about dict server, i.e.
+   text returned by SHOW SERVER command
+*/
+const char        *site_info           = NULL;
+int                site_info_no_banner = 0;
+int                site_info_no_uptime = 0;
+int                site_info_no_dblist = 0;
 
 
 
@@ -380,7 +388,7 @@ static void postprocess_filenames (dictConfig *dc)
       db -> pluginFilename = postprocess_plugin_filename (db -> pluginFilename);
    }
 
-   dc -> site = postprocess_dict_filename (dc -> site);
+   site_info = postprocess_dict_filename (site_info);
 }
 
 static void handler_sighup (int sig)
@@ -839,7 +847,7 @@ static int init_database( const void *datum )
       PRINTF (DBG_INIT, (":I:   Opening indices\n"));
    }
 
-   db->index        = dict_index_open( db->indexFilename, 1, 0, 0 );
+   db->index        = dict_index_open( db->indexFilename, 1, NULL );
 
    if (db->indexFilename){
       PRINTF (DBG_INIT, (":I:     .index <ok>\n"));
@@ -848,10 +856,11 @@ static int init_database( const void *datum )
    if (db->index){
       db->index_suffix = dict_index_open(
 	 db->indexsuffixFilename,
-	 0, db->index->flag_utf8, db->index->flag_allchars);
+	 0, db->index);
+
       db->index_word = dict_index_open(
 	 db->indexwordFilename,
-	 0, db->index->flag_utf8, db->index->flag_allchars);
+	 0, db->index);
    }
 
    if (db->index_suffix){
@@ -1073,44 +1082,13 @@ static void dict_close_databases (dictConfig *c)
       lst_destroy (c -> acl);
    }
 
-   if (c -> site)
-      xfree ((void *) c -> site);
+   if (site_info)
+      xfree ((void *) site_info);
 
    xfree (c);
 }
 
-static int match_mode = 0;
-
-static int dump_def( const void *datum )
-{
-   char         *buf;
-   const dictWord     *dw = (dictWord *)datum;
-
-   const dictDatabase *db = dw -> database_visible;
-   if (!db)
-      db = dw -> database;
-
-   if (match_mode){
-      printf (
-	 "%s:\t\"%s\"\n", db -> databaseName, dw -> word );
-   }else{
-      buf = dict_data_obtain( dw -> database, dw );
-
-      printf (
-	 "From %s [%s]:\n\n%s\n", db -> databaseShort, db -> databaseName, buf );
-
-      xfree( buf );
-   }
-
-   return 0;
-}
-
-static void dict_dump_defs( lst_List list )
-{
-   lst_iterate (list, dump_def);
-}
-
-static const char *id_string( const char *id )
+static const char *id_string (void)
 {
    static char buffer [BUFFERSIZE];
 
@@ -1123,7 +1101,6 @@ const char *dict_get_banner( int shortFlag )
 {
    static char    *shortBuffer = NULL;
    static char    *longBuffer = NULL;
-   const char     *id = "$Id: dictd.c,v 1.136 2006/12/12 21:20:22 cheusov Exp $";
    struct utsname uts;
    
    if (shortFlag && shortBuffer) return shortBuffer;
@@ -1134,12 +1111,12 @@ const char *dict_get_banner( int shortFlag )
    shortBuffer = xmalloc(256);
    snprintf(
       shortBuffer, 256,
-      "%s %s", err_program_name(), id_string( id ) );
+      "%s %s", err_program_name(), id_string () );
 
    longBuffer = xmalloc(256);
    snprintf(
       longBuffer, 256,
-      "%s %s/rf on %s %s", err_program_name(), id_string( id ),
+      "%s %s/rf on %s %s", err_program_name(), id_string (),
       uts.sysname,
       uts.release );
 
@@ -1152,7 +1129,9 @@ const char *dict_get_banner( int shortFlag )
 static void banner( void )
 {
    printf( "%s\n", dict_get_banner(0) );
-   printf( "Copyright 1997-2002 Rickard E. Faith (faith@dict.org)\n\n" );
+   printf( "Copyright 1997-2002 Rickard E. Faith (faith@dict.org)\n" );
+   printf( "Copyright 2002-2007 Aleksey Cheusov (vle@gmx.net)\n" );
+   printf( "\n" );
 }
 
 static void license( void )
@@ -1213,17 +1192,6 @@ static void help( void )
                                    with a description <descr>.",
 "   --listen-to                     bind a socket to the specified address",
 "\n------------------ options for debugging ---------------------------",
-"-t --test <word>                lookup word",
-"   --test-file <file>",
-"   --ftest <file>               lookup all words in file",
-"   --test-strategy <strategy>   search strategy for --test and --ftest.\n\
-                                the default is 'exact'",
-"   --test-db <database>         database name for --test and --ftest.\n\
-                                the default is '*'",
-"   --test-match                 show matched words but the definitions",
-"   --test-nooutput              produces no output",
-"   --test-idle                  does everything except search",
-"   --test-show-info <database>  shows information about specified database",
 "   --fast-start                 don't create additional (internal) index.",
 #ifdef HAVE_MMAP
 "   --without-mmap               do not use mmap() function and load files\n\
@@ -1318,6 +1286,7 @@ static void sanity(const char *confFile)
 	    ++fail;
 	    reading_error = 1;
 	 }
+
 	 if (e->dataFilename && access(e->dataFilename, R_OK)) {
 	    log_info(":E: %s is not readable (data file)\n",
 		     e->dataFilename);
@@ -1438,147 +1407,6 @@ static void dict_make_dbs_available (dictConfig *cfg)
    }
 }
 
-static const char *database_arg="*";
-
-static int idle_mode     = 0;
-static int nooutput_mode = 0;
-static int show_info_mode= 0;
-
-static void dict_test (
-   const char *word,
-   int strategy)
-{
-   lst_List l;
-   int count = 0;
-   int db_found = 0;
-
-   l = lst_create ();
-
-   count = dict_search_databases (l, NULL, database_arg, word, strategy, &db_found);
-
-   if (db_found){
-      if (!nooutput_mode){
-	 if (count > 0){
-	    dict_dump_defs (l);
-	 }else{
-	    fprintf (stderr, "No definitions found for \"%s\"\n", word);
-	 }
-      }
-   }else{
-      fprintf (stderr, "%s is not a valid database\n", database_arg);
-   }
-
-#ifdef USE_PLUGIN
-   call_dictdb_free (DictConfig->dbl);
-#endif
-
-   dict_destroy_list (l);
-}
-
-static void dict_test_word (const char *word, int strategy)
-{
-   dict_config_print( NULL, DictConfig );
-   dict_init_databases( DictConfig );
-
-   dict_make_dbs_available (DictConfig);
-
-   if (!idle_mode){
-      dict_test (word, strategy);
-
-      if (!nooutput_mode){
-	 fprintf( stderr, "%d comparisons\n", _dict_comparisons );
-      }
-   }
-
-   dict_close_databases (DictConfig);
-
-   destroy ();
-
-   exit( 0 );
-}
-
-static void dict_test_file (const char *filename, int strategy)
-{
-   FILE         *str;
-   char         buf[1024], *pt;
-   int          words = 0;
-   int                word_len;
-
-   if (!(str = fopen(filename,"r")))
-      err_fatal_errno( "Cannot open \"%s\" for read\n", filename );
-
-   dict_config_print( NULL, DictConfig );
-   dict_init_databases( DictConfig );
-   dict_make_dbs_available (DictConfig);
-
-   while (fgets(buf,1024,str)) {
-      word_len = strlen( buf );
-      if (word_len > 0){
-	 if ('\n' == buf [word_len - 1]){
-	    buf [word_len - 1] = '\0';
-	 }
-      }
-
-      if ((pt = strchr(buf, '\t')))
-	 *pt = '\0'; /* stop at tab */
-
-      if (buf[0]){
-	 ++words;
-
-	 if (!idle_mode){
-	    dict_test (buf, strategy);
-	 }
-      }
-
-      if (words && !(words % 1000)){
-	 if (!nooutput_mode){
-	    fprintf(
-	       stderr,
-	       "%d comparisons, %d words\n", _dict_comparisons, words );
-	 }
-      }
-   }
-
-   if (!nooutput_mode){
-      fprintf(
-	 stderr,
-	 "%d comparisons, %d words\n", _dict_comparisons, words );
-   }
-
-   fclose( str);
-
-   dict_close_databases (DictConfig);
-
-   destroy ();
-
-   exit(0);
-/* Comparisons:
-   P5/133
-   1878064 comparisons, 113955 words
-   39:18.72u 1.480s 55:20.27 71%
-*/
-}
-
-extern void daemon_show_info (
-   const char *cmdline, int argc, const char **argv);
-
-static void dict_test_show_info (const char *database)
-{
-   const char * argv [] = {"SHOW", "INFO", database};
-
-   dict_config_print( NULL, DictConfig );
-   dict_init_databases( DictConfig );
-   dict_make_dbs_available (DictConfig);
-
-   daemon_show_info ("", 3, argv);
-
-   dict_close_databases (DictConfig);
-
-   destroy ();
-
-   exit (0);
-}
-
 FILE *pid_fd = NULL;
 
 static void pid_file_create ()
@@ -1629,13 +1457,8 @@ int main (int argc, char **argv, char **envp)
    time_t             startTime;
    int                alen         = sizeof(csin);
    int                detach       = 1;
-   const char         *testWord    = NULL;
-   const char         *testFile    = NULL;
    int                forceStartup = 0;
    int                i;
-
-   const char *       strategy_arg = "exact";
-   int                strategy     = DICT_STRAT_EXACT;
 
    const char *       default_strategy_arg = "???";
 
@@ -1650,9 +1473,6 @@ int main (int argc, char **argv, char **envp)
       { "config",   1, 0, 'c' },
       { "help",     0, 0, 'h' },
       { "license",  0, 0, 500 },
-      { "test",     1, 0, 't' },
-      { "ftest",    1, 0, 501 },
-      { "test-file",1, 0, 501 },
       { "log",      1, 0, 'l' },
       { "logfile",  1, 0, 'L' },
       { "syslog",   0, 0, 's' },
@@ -1664,22 +1484,16 @@ int main (int argc, char **argv, char **envp)
       { "force",    1, 0, 'f' },
       { "inetd",    0, 0, 'i' },
       { "locale",           1, 0, 506 },
-      { "test-strategy",    1, 0, 507 },
 #ifdef HAVE_MMAP
       { "no-mmap",          0, 0, 508 },
       { "without-mmap",     0, 0, 508 },
 #endif
-      { "test-db",          1, 0, 509 },
       { "default-strategy", 1, 0, 511 },
-      { "test-match",       0, 0, 512 },
       { "without-strategy", 1, 0, 513 },
-      { "test-nooutput",    0, 0, 514 },
-      { "test-idle",        0, 0, 515 },
       { "add-strategy",     1, 0, 516 },
       { "fast-start",       0, 0, 517 },
       { "pp",               1, 0, 518 },
       { "listen-to",        1, 0, 519 },
-      { "test-show-info",   1, 0, 520 },
       { "pid-file",         1, 0, 521 },
       { "stdin2stdout",     0, 0, 522 },
       { 0,                  0, 0, 0  }
@@ -1728,7 +1542,6 @@ int main (int argc, char **argv, char **envp)
 	 daemon_service_set = 1;
 	 break;
       case 'c': configFile = str_copy(optarg);            break;
-      case 't': testWord = str_copy(optarg);              break;
       case 'L':
 	 logFile     = str_copy(optarg);
 	 logFile_set = 1;
@@ -1749,18 +1562,18 @@ int main (int argc, char **argv, char **envp)
 	 if (flg_test(LOG_MIN)) set_minimal();
 	 break;
       case 500: license(); exit(1);                       break;
-      case 501: testFile = str_copy(optarg);              break;
       case 502:
 	 client_delay     = atoi(optarg);
 	 client_delay_set = 1;
+	 _dict_daemon_limit_time = 0;
 	 break;
       case 503:
 	 depth     = atoi(optarg);
 	 depth_set = 1;
 	 break;
       case 504:
-	 _dict_daemon_limit     = atoi(optarg);
-	 _dict_daemon_limit_set = 1;
+	 _dict_daemon_limit_childs = atoi(optarg);
+	 _dict_daemon_limit_childs_set = 1;
 	 break;
       case 505:
 	 ++useSyslog;
@@ -1772,27 +1585,13 @@ int main (int argc, char **argv, char **envp)
 	 locale_set = 1;
 	 break;
       case 508: mmap_mode = 0;                            break;
-      case 509: database_arg = str_copy(optarg);          break;
-      case 507:
-	 strategy_arg = str_copy (optarg);
-	 strategy = lookup_strategy (strategy_arg);
-	 break;
       case 511:
 	 default_strategy_arg = str_copy (optarg);
 	 default_strategy     = lookup_strategy_ex (default_strategy_arg);
 	 default_strategy_set = 1;
 	 break;
-      case 512:
-	 match_mode = 1;
-	 break;
       case 513:
 	 dict_disable_strategies (optarg);
-	 break;
-      case 514:
-	 nooutput_mode = 1;
-	 break;
-      case 515:
-	 idle_mode = 1;
 	 break;
       case 516:
 	 new_strategy = optarg;
@@ -1813,10 +1612,6 @@ int main (int argc, char **argv, char **envp)
 	 bind_to     = str_copy (optarg);
 	 bind_to_set = 1;
 	 break;
-      case 520:
-	 database_arg = str_copy(optarg);
-	 show_info_mode = 1;
-	 break;
       case 521:
 	 pidFile     = str_copy(optarg);
 	 pidFile_set = 1;
@@ -1828,15 +1623,15 @@ int main (int argc, char **argv, char **envp)
       default:  help(); exit(0);                          break;
       }
 
-   if (testWord || testFile || inetd || show_info_mode)
+   if (inetd)
       detach = 0;
 
-   if (
-      -1 == strategy ||
-      (strategy_arg = default_strategy_arg, -1 == default_strategy))
-   {
-      fprintf (stderr, "%s is not a valid search strategy\n", strategy_arg);
+   if (-1 == default_strategy){
+      fprintf (stderr, "%s is not a valid search strategy\n",
+	       default_strategy_arg);
+
       fprintf (stderr, "available ones are:\n");
+
       for (i = 0; i < get_strategy_count (); ++i){
 	  fprintf (
 	      stderr, "  %15s : %s\n",
@@ -1890,25 +1685,6 @@ int main (int argc, char **argv, char **envp)
 
    sanity(configFile);
 
-   if (match_mode)
-      strategy |= DICT_MATCH_MASK;
-
-
-   if (show_info_mode) {
-      dict_test_show_info (database_arg);
-      abort (); /* this should not happen */
-   }
-
-   if (testWord) {		/* stand-alone test mode */
-      dict_test_word (testWord, strategy);
-      abort (); /* this should not happen */
-   }
-
-   if (testFile) {
-      dict_test_file (testFile, strategy);
-      abort (); /* this should not happen */
-   }
-
    setsig(SIGCHLD, reaper, SA_RESTART);
    setsig(SIGHUP,   handler_sighup, 0);
    setsig(SIGUSR1,  handler_sigusr1, 0);
@@ -1935,7 +1711,7 @@ int main (int argc, char **argv, char **envp)
    dict_initsetproctitle(argc, argv, envp);
 
    if (inetd) {
-      dict_inetd(&argv, client_delay, 0);
+      dict_inetd(&argv, 0);
       exit(0);
    }
 
@@ -1981,22 +1757,28 @@ int main (int argc, char **argv, char **envp)
       }
 
       if (_dict_daemon || dbg_test(DBG_NOFORK)) {
-	 dict_daemon(childSocket,&csin,&argv,client_delay,0);
+	 dict_daemon(childSocket,&csin,&argv,0);
       } else {
-	 if (_dict_forks - _dict_reaps < _dict_daemon_limit) {
+	 if (_dict_forks - _dict_reaps < _dict_daemon_limit_childs) {
 	    if (!start_daemon()) { /* child */
 	       int databases_loaded = (DictConfig != NULL);
 
 	       alarm(0);
+	       if (_dict_daemon_limit_time){
+		  setsig (SIGALRM, handler, 0);
+		  alarm(_dict_daemon_limit_time);
+	       }
+
 	       dict_daemon (
-		  childSocket, &csin, &argv, client_delay,
+		  childSocket, &csin, &argv,
 		  databases_loaded ? 0 : 2);
+
 	       exit(0);
 	    } else {		   /* parent */
 	       close(childSocket);
 	    }
 	 } else {
-	    dict_daemon(childSocket,&csin,&argv,client_delay,1);
+	    dict_daemon(childSocket, &csin, &argv, 1);
 	 }
       }
    }

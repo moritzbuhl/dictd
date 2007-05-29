@@ -41,10 +41,22 @@
 #include <arpa/inet.h>
 */
 
+extern const char *site_info;
+extern int         site_info_no_banner;
+extern int         site_info_no_uptime;
+extern int         site_info_no_dblist;
+
 extern const char *daemon_service;
 extern int client_delay;
 extern int depth;
-extern int _dict_daemon_limit;
+
+extern int _dict_daemon_limit_childs;
+extern int _dict_daemon_limit_childs_set;
+
+extern int _dict_daemon_limit_matches;
+extern int _dict_daemon_limit_defs;
+extern int _dict_daemon_limit_time;
+extern int _dict_daemon_limit_queries;
 extern int _dict_markTime;
 extern const char *logFile;
 extern const char *pidFile;
@@ -59,7 +71,6 @@ extern int pidFile_set;
 extern int _dict_markTime_set;
 extern int client_delay_set;
 extern int depth_set;
-extern int _dict_daemon_limit_set;
 extern int syslog_facility_set;
 extern int locale_set;
 extern int default_strategy_set;
@@ -112,8 +123,8 @@ extern const char *postprocess_plugin_filename (const char *fn);
 /* daemon.c */
 
 extern int  dict_daemon( int s, struct sockaddr_in *csin, char ***argv0,
-			 int delay_, int error );
-extern int  dict_inetd( char ***argv0, int delay_, int error );
+			 int error );
+extern int  dict_inetd( char ***argv0, int error );
 extern void daemon_terminate( int sig, const char *name );
 
 /* */

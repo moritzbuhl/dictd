@@ -16,14 +16,12 @@
  * You should have received a copy of the GNU General Public License along
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
- * 
- * $Id: net.c,v 1.29 2006/05/06 08:53:51 cheusov Exp $
- * 
  */
 
 #include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <sys/termios.h>
+#include <sys/socket.h>
 
 #include "dictP.h"
 

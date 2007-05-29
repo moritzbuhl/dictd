@@ -15,8 +15,6 @@
  * You should have received a copy of the GNU General Public License along
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
- *
- * $Id: strategy.h,v 1.7 2005/11/19 21:59:53 cheusov Exp $
  */
 
 #ifndef _STRATEGY_H_
@@ -36,6 +34,8 @@
 #define DICT_STRAT_LEVENSHTEIN  8     /* Levenshtein */ 
 #define DICT_STRAT_WORD         9     /* Word */
 #define DICT_STRAT_NPREFIX      10    /* NPrefix */ 
+#define DICT_STRAT_FIRST        11    /* First */ 
+#define DICT_STRAT_LAST         12    /* Last */ 
 
 typedef struct dictStrategy {
    const char *name;

@@ -16,9 +16,6 @@
  * You should have received a copy of the GNU General Public License along
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
- * 
- * $Id: servparse.y,v 1.26 2005/04/14 07:52:16 cheusov Exp $
- * 
  */
 
 %{
@@ -26,11 +23,25 @@
 #include "strategy.h"
 #include "index.h"
 #include "data.h"
+#include "maa.h"
 
 #define YYDEBUG 1
 #define YYERROR_VERBOSE
 
 static dictDatabase *db;
+
+static int string2bool (const char *str)
+{
+   if (
+      !strcasecmp ("1", str)
+      || !strcasecmp ("true", str)
+      || !strcasecmp ("yes", str))
+   {
+      return 1;
+   }else{
+      return 0;
+   }
+}
 
 #define SET(field,s,t) do {                                   \
    if (db->field)                                             \
@@ -54,7 +65,11 @@ static dictDatabase *db;
 %token <token> TOKEN_GROUP TOKEN_DATABASE TOKEN_DATA
 %token <token> TOKEN_INDEX TOKEN_INDEX_SUFFIX TOKEN_INDEX_WORD
 %token <token> TOKEN_FILTER TOKEN_PREFILTER TOKEN_POSTFILTER TOKEN_NAME TOKEN_INFO
-%token <token> TOKEN_USER TOKEN_AUTHONLY TOKEN_SITE TOKEN_DATABASE_EXIT
+%token <token> TOKEN_USER TOKEN_AUTHONLY TOKEN_DATABASE_EXIT
+
+%token <token> TOKEN_SITE TOKEN_SITE_NO_BANNER TOKEN_SITE_NO_UPTIME
+%token <token> TOKEN_SITE_NO_DBLIST
+
 %token <token> TOKEN_STRING
 %token <token> TOKEN_INVISIBLE TOKEN_DISABLE_STRAT
 %token <token> TOKEN_DATABASE_VIRTUAL TOKEN_DATABASE_LIST
@@ -65,7 +80,7 @@ static dictDatabase *db;
 %token <token> TOKEN_PORT
 %token <token> TOKEN_DELAY
 %token <token> TOKEN_DEPTH
-%token <token> TOKEN_LIMIT
+
 %token <token> TOKEN_TIMESTAMP
 %token <token> TOKEN_LOG_OPTION
 %token <token> TOKEN_DEBUG_OPTION
@@ -78,6 +93,12 @@ static dictDatabase *db;
 %token <token> TOKEN_PID_FILE
 %token <token> TOKEN_FAST_START
 %token <token> TOKEN_WITHOUT_MMAP
+
+%token <token> TOKEN_LIMIT_CHILDS
+%token <token> TOKEN_LIMIT_MATCHES
+%token <token> TOKEN_LIMIT_DEFS
+%token <token> TOKEN_LIMIT_TIME
+%token <token> TOKEN_LIMIT_QUERIES
 
 %token <token> TOKEN_MIME_DBNAME
 %token <token> TOKEN_NOMIME_DBNAME
@@ -118,27 +139,27 @@ Program : Global DatabaseList
         | Global Site DatabaseList
           { DictConfig = xmalloc(sizeof(struct dictConfig));
 	    memset( DictConfig, 0, sizeof(struct dictConfig) );
-	    DictConfig->site = $2.string;
+	    site_info        = $2.string;
 	    DictConfig->dbl  = $3;
 	  }
         | Global Site Access DatabaseList
           { DictConfig = xmalloc(sizeof(struct dictConfig));
 	    memset( DictConfig, 0, sizeof(struct dictConfig) );
-	    DictConfig->site = $2.string;
+	    site_info        = $2.string;
 	    DictConfig->acl  = $3;
 	    DictConfig->dbl  = $4;
 	  }
         | Global Site DatabaseList UserList
           { DictConfig = xmalloc(sizeof(struct dictConfig));
 	    memset( DictConfig, 0, sizeof(struct dictConfig) );
-	    DictConfig->site = $2.string;
+	    site_info        = $2.string;
 	    DictConfig->dbl  = $3;
 	    DictConfig->usl  = $4;
 	  }
         | Global Site Access DatabaseList UserList
           { DictConfig = xmalloc(sizeof(struct dictConfig));
 	    memset( DictConfig, 0, sizeof(struct dictConfig) );
-	    DictConfig->site = $2.string;
+	    site_info        = $2.string;
 	    DictConfig->acl  = $3;
 	    DictConfig->dbl  = $4;
 	    DictConfig->usl  = $5;
@@ -159,6 +180,28 @@ GlobalSpec : TOKEN_PORT             TOKEN_STRING
 	if (!daemon_service_set)
 	   daemon_service = str_copy($2.string);
      }
+   | TOKEN_SITE             TOKEN_STRING
+     {
+	if (site_info){
+	   /* site is specified twice */
+	   xfree ((void *) site_info);
+	}
+
+	site_info = $2.string;
+     }
+   | TOKEN_SITE_NO_BANNER     TOKEN_STRING
+     {
+	site_info_no_banner = string2bool ($2.string);
+	fprintf (stderr, "site_info_no_banner=%d\n", site_info_no_banner);
+     }
+   | TOKEN_SITE_NO_UPTIME   TOKEN_STRING
+     {
+	site_info_no_uptime = string2bool ($2.string);
+     }
+   | TOKEN_SITE_NO_DBLIST  TOKEN_STRING
+     {
+	site_info_no_dblist = string2bool ($2.string);
+     }
    | TOKEN_PORT             TOKEN_NUMBER
      {
 	if (!daemon_service_set){
@@ -171,16 +214,35 @@ GlobalSpec : TOKEN_PORT             TOKEN_STRING
      {
 	if (!client_delay_set)
 	   client_delay = $2;
+
+	_dict_daemon_limit_time = 0;
      }
    | TOKEN_DEPTH            TOKEN_NUMBER
      {
 	if (!depth_set)
 	   depth = $2;
      }
-   | TOKEN_LIMIT            TOKEN_NUMBER
+   | TOKEN_LIMIT_CHILDS     TOKEN_NUMBER
      {
-	if (!_dict_daemon_limit_set)
-	   _dict_daemon_limit = $2;
+	if (!_dict_daemon_limit_childs_set)
+	   _dict_daemon_limit_childs = $2;
+     }
+   | TOKEN_LIMIT_MATCHES    TOKEN_NUMBER
+     {
+	_dict_daemon_limit_matches = $2;
+     }
+   | TOKEN_LIMIT_DEFS       TOKEN_NUMBER
+     {
+	_dict_daemon_limit_defs = $2;
+     }
+   | TOKEN_LIMIT_TIME       TOKEN_NUMBER
+     {
+	_dict_daemon_limit_time = $2;
+	client_delay            = 0;
+     }
+   | TOKEN_LIMIT_QUERIES    TOKEN_NUMBER
+     {
+	_dict_daemon_limit_queries = $2;
      }
    | TOKEN_TIMESTAMP        TOKEN_NUMBER
      {
@@ -265,7 +327,11 @@ AccessSpecList : AccessSpec { $$ = lst_create(); lst_append($$, $1); }
                | AccessSpecList AccessSpec { lst_append($1, $2); $$ = $1; }
                ;
 
-Site : TOKEN_SITE TOKEN_STRING { $$ = $2; }
+Site : TOKEN_SITE TOKEN_STRING
+       {
+	  $$ = $2;
+	  log_error (NULL, ":E: Move \"site\" directive to section \"global\" of the configuration file!");
+       }
      ;
 
 UserList : TOKEN_USER TOKEN_STRING TOKEN_STRING

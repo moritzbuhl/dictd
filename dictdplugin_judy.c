@@ -16,9 +16,6 @@
  * You should have received a copy of the GNU General Public License along
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
- * 
- * $Id: dictdplugin_judy.c,v 1.23 2004/11/17 12:39:44 cheusov Exp $
- * 
  */
 
 #include "dictP.h"
@@ -327,7 +324,7 @@ static void read_index_file (
       if (
 	 tolower_alnumspace (
 	    buf, buf,
-	    dict_data -> m_conf_allchars, dict_data -> m_conf_utf8))
+	    dict_data -> m_conf_allchars, 0, dict_data -> m_conf_utf8))
       {
 	 plugin_error (dict_data, "tolower_alnumspace failed while reading .index file");
 	 fclose (fd);
@@ -835,7 +832,7 @@ int dictdb_search (
    if (
       tolower_alnumspace (
 	 word_copy2, word_copy2,
-	 dict_data -> m_conf_allchars, dict_data -> m_conf_utf8))
+	 dict_data -> m_conf_allchars, 0, dict_data -> m_conf_utf8))
    {
       plugin_error (dict_data, "tolower_alnumspace in dictdb_search failed");
       return 1;

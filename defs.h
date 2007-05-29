@@ -15,8 +15,6 @@
  * You should have received a copy of the GNU General Public License along
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
- *
- * $Id: defs.h,v 1.11 2005/03/29 17:55:50 cheusov Exp $
  */
 
 #ifndef _DEFS_H_
@@ -33,8 +31,13 @@
 #define DICT_DEFAULT_SERVICE     "2628"	/* Also in dict.h */
 #define DICTD_CONFIG_NAME        "dictd.conf"
 #define DICT_QUEUE_DEPTH         10
-#define DICT_DEFAULT_DELAY       600 /* 10 minute timeout */
-#define DICT_DAEMON_LIMIT        100 /* maximum simultaneous daemons */
+#define DICT_DAEMON_LIMIT_CHILDS   100 /* maximum simultaneous daemons */
+#define DICT_DAEMON_LIMIT_MATCHES  2000 /* maximum number of matches */
+#define DICT_DAEMON_LIMIT_DEFS     200  /* maximum number of definitions */
+#define DICT_DAEMON_LIMIT_TIME     600  /* maximum seconds per client */
+#define DICT_DAEMON_LIMIT_QUERIES  2000 /* maximum queries per client */
+
+#define DICT_DEFAULT_DELAY         0 /* 'limit_time' in work by default */
 #define DICT_PERSISTENT_PRESTART 3 /* not implemented */
 #define DICT_PERSISTENT_LIMIT    5 /* not implemented */
 
@@ -48,6 +51,7 @@
 #define DICT_FLAG_8BIT_NEW       DICT_ENTRY_PREFIX"-8bit-new"
 #define DICT_FLAG_8BIT_OLD       DICT_ENTRY_PREFIX"-8bit"
 #define DICT_FLAG_ALLCHARS       DICT_ENTRY_PREFIX"-allchars"
+#define DICT_FLAG_CASESENSITIVE  DICT_ENTRY_PREFIX"-case-sensitive"
 #define DICT_FLAG_VIRTUAL        DICT_ENTRY_PREFIX"-virtual"
 #define DICT_FLAG_ALPHABET       DICT_ENTRY_PREFIX"-alphabet"
 #define DICT_FLAG_DEFAULT_STRAT  DICT_ENTRY_PREFIX"-default-strategy"
@@ -175,6 +179,7 @@ typedef struct dictIndex {
    int    flag_utf8;         /* not zero if it has 00-database-utf8 entry*/
    int    flag_8bit;         /* not zero if it has 00-database-8bit-new entry*/
    int    flag_allchars;     /* not zero if it has 00-database-allchars entry*/
+   int    flag_casesensitive;/* not zero if it has 00-database-case-sensitive entry*/
 
    const int     *isspacealnum;
 } dictIndex;
@@ -249,7 +254,6 @@ typedef struct dictConfig {
    lst_List      acl;		/* type dictAccess */
    lst_List      dbl;		/* type dictDatabase */
    hsh_HashTable usl;		/* username/shared-secret list */
-   const char    *site;
 } dictConfig;
 
 typedef struct dictWord {

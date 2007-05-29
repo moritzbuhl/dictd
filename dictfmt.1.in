@@ -28,6 +28,7 @@ dictfmt \- formats a DICT protocol dictionary database
 .SH SYNOPSIS
 .nf
 .BI dictfmt "  -c5|-t|-e|-f|-h|-j|-p [options]  basename"
+.BI dictfmt "  -i|-I [options]"
 .fi
 .SH DESCRIPTION
 .B dictfmt
@@ -59,7 +60,8 @@ the
 source package.)    
 
 FILE may be in any of the several formats described by 
-the format options \-c5, \-t, \-e, \-f, \-h, \-j, or \-p.  Exactly one of 
+the format options \-c5, \-t, \-e, \-f, \-h, \-j, \-p, \-i or \-I.
+Exactly one of 
 these options must be given.
 
 .B dictfmt
@@ -196,18 +198,30 @@ text before the first headword is included in the headers.
 .B The second line beginning '%h' is taken as the first headword.  
 ..br
 This option was written to format Jay Kominek's elements database.  
-
+.TP
+.BI \-i \  \-I
+These two options are different from all other formatting options.
+They are intended to resort (according to 
+.I dictd
+requirement) an .index file given on stdin.
+That is .dict file is not generated at all. Only resorting is made.
+Three- or four-column .index like input is expected.
+.B \-i
+expects decimal offset and length, while
+.B \-I
+expects them
+in base64 format.
 .SH OPTIONS
 .TP
 .BI \-u " url"
 Specifies the URL of the site from which the raw database was obtained.
-If this option is specified, 00-database-url/00databaseurl headword and
+If this option is specified, 00-database-url headword and
 appropriate definition will be ignored.
 .TP
 .BI \-s " name"
 Specifies the name and, optionally, the version and date, of the
 database.  (If this contains spaces, it must be quoted.)
-If this option is specified, 00-database-short/00databaseshort headword and
+If this option is specified, 00-database-short headword and
 appropriate definition will be ignored.
 .TP
 .BI \-L 
@@ -224,10 +238,12 @@ display a help message
 .TP
 .BI \--locale " locale"
 Specifies the locale used for sorting.  If no locale is specified, the
-"C" locale is used. For using UTF-8 mode, --utf8 is recommended.
+"C" locale is used. For using UTF-8 mode, --utf8 is needed.
 .TP
-.BI \--utf8
-generate database in UTF-8 mode
+.BI \--8bit
+generates database in 8-bit mode, see
+.I \--locale
+option also.
 .RS
 .B Note:
 This option is deprecated.
@@ -241,13 +257,29 @@ option instead.
 If specified, UTF-8 database is created.
 .TP
 .BI \--allchars
-use all characters (not only alphanumeric and space) in sorting the index
+Specifies that all characters should be used for the search,
+by default only alphabetic, numeric
+characters and spaces are put to .index file and therefore
+are used in search. Creates the special entry 00-database-allchars.
+.TP
+.BI \--case-sensitive
+makes the search case sensitive.
+Creates the special entry 00-database-case-sensitive.
 .TP
 .BI \--headword-separator " sep"
 sets the headword separator, which allows several words to have the same
 definition.  For example, if \'--headword-separator %%%' is given,
 and the input file contains \'autumn%%%fall', both 'autumn' and 'fall'
 will be indexed as  headwords, with the same definition.
+.TP
+.BI \--index-data-separator " sep"
+sets the index/data separator, which allows to set the first and fourth
+columns of .index file independently. That is
+the first column can be treated as an index column
+(where the MATCH command searches) and the fourth column as a result column
+(where the MATCH gets things to be returned),
+and they (1-st and 4-th columns) are completely independant of each other.
+The default value for this separator is ASCII symbol " \\034".
 .TP
 .BI \--break-headwords
 multiple headwords will be written on separate lines in the .dict
@@ -275,6 +307,13 @@ URL will not be copied to DB info entry
 .TP
 .BI \--without-time
 time of creation will not be copied to DB info entry
+.TP
+.BI \--without-ver
+By default
+.B dictfmt
+creates a special entry 00-database-dictfmt-X.Y.Z that contains
+(in .dict file)
+dictfmt version in format dictfmt-X.Y.Z. This option suppresses this.
 .TP
 .BI \--without-info
 DB info entry will not be created.
@@ -306,7 +345,8 @@ When client sends
 command to the
 .I dictd
 , definitions found in this database
-are prepended by the specified MIME header.
+are prepended by the specified MIME header. Creates the special entry
+00-database-mime-header.
 .SH CREDITS
 .B dictfmt
 was written by Rik Faith (faith@cs.unc.edu) as part of the dict-misc

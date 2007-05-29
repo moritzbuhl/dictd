@@ -16,14 +16,6 @@
  * You should have received a copy of the GNU General Public License along
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
- * 
- * $Id: dictfmt.c,v 1.67 2006/05/27 14:25:58 cheusov Exp $
- *
- * Sun Jul 5 18:48:33 1998: added patches for Gutenberg's '1995 CIA World
- * Factbook' from David Frey <david@eos.lugs.ch>.
- *
- * v. 1.6 Mon, 25 Dec 2000 18:38:02 -0500 added -V, -L and --help options
- * Robert D. Hilliard <hilliard@debian.org>
  */
 
 #include "dictP.h"
@@ -71,10 +63,16 @@ static int bit8_mode     = 0;
 static int index_keep_orig_mode = 0;
 
 static int allchars_mode = 0;
+static int cs_mode       = 0;
 
 static int quiet_mode    = 0;
 
-static const char *hw_separator = "";
+static int dictfmt_ver_mode = 1;
+
+static int indexonly_base64 = 0;
+
+static const char *hw_separator     = "";
+static const char *idxdat_separator = "\034";
 
 static int         without_hw      = 0;
 static int         without_header  = 0;
@@ -96,9 +94,9 @@ static int ignore_hw_shortname = 0;
 static int ignore_hw_info      = 0;
 static int ignore_hw_def_strat = 0;
 
-static const char *locale      = NULL;
+static const char *locale           = NULL;
 static const char *default_strategy = NULL;
-static const char *mime_header = NULL;
+static const char *mime_header      = NULL;
 
 static str_Pool alphabet_pool = NULL;
 
@@ -167,15 +165,18 @@ static void destroy_and_exit (int exit_status)
 
 static void fmt_openindex( const char *filename )
 {
-   char buffer[1024];
-
-   if (!filename)
-      return;
+   char buffer [1024];
 
    if (bit8_mode || utf8_mode || allchars_mode)
-      snprintf( buffer, sizeof (buffer), "sort -t '\t' -k 1,3 > %s\n", filename );
+      snprintf( buffer, sizeof (buffer), "sort -t '\t' -k 1,3" );
    else
-      snprintf( buffer, sizeof (buffer), "sort -t '\t' -df -k 1,3 > %s\n", filename );
+      snprintf( buffer, sizeof (buffer), "sort -t '\t' -df -k 1,3" );
+
+   if (filename){
+      strlcat (buffer, "> ", sizeof (buffer));
+      strlcat (buffer, filename, sizeof (buffer));
+   }
+   strlcat (buffer, "\n", sizeof (buffer));
 
    if (!(fmt_str = popen( buffer, "w" ))) {
       fprintf( stderr, "Cannot open %s for write\n", buffer );
@@ -427,14 +428,36 @@ static char *trim_lr (char *s)
    return trim_left (trim_right (s));
 }
 
-static void write_hw_to_index (const char *word, int start, int end)
+static int is_headword_special (const char *hw)
+{
+   return (!strncmp (hw, "00-database", 11) ||
+	   !strncmp (hw, "00database", 10));
+}
+
+static void increase_fmt_hwcount ()
+{
+   if (!quiet_mode){
+      if (fmt_hwcount && !(fmt_hwcount % 100)) {
+	 fprintf( stderr, "%10d headwords\r", fmt_hwcount );
+      }
+   }
+
+   ++fmt_hwcount;
+}
+
+static void write_hw_to_index (
+   const char *word,
+   const char *data,
+   int start, int end)
 {
    int len = 0;
-   char *new_word = NULL;
    char *trimmed_new_word = NULL;
+   char *new_word = NULL;
 
    if (!word)
        return;
+
+   increase_fmt_hwcount ();
 
    len = strlen (word);
 
@@ -446,7 +469,9 @@ static void write_hw_to_index (const char *word, int start, int end)
 	 destroy_and_exit (1);
       }
 
-      if (tolower_alnumspace (word, new_word, allchars_mode, utf8_mode)){
+      if (tolower_alnumspace (
+	     word, new_word, allchars_mode, cs_mode, utf8_mode))
+      {
 	 fprintf (stderr, "'%s' is not a UTF-8 string", word);
 
 	 destroy_and_exit (1);
@@ -455,14 +480,56 @@ static void write_hw_to_index (const char *word, int start, int end)
       fprintf( fmt_str, "%s\t%s\t", new_word, b64_encode(start) );
       fprintf( fmt_str, "%s", b64_encode(end-start) );
 
-      if (index_keep_orig_mode && strcmp (word, new_word)){
-	 fprintf( fmt_str, "\t%s\n", word);
+      if (!data && index_keep_orig_mode && strcmp (word, new_word)){
+	 data = word;
+      }
+
+      if (data && !is_headword_special (word)){
+	 fprintf( fmt_str, "\t%s\n", data);
       }else{
 	 fprintf( fmt_str, "\n");
       }
 
       free (new_word);
    }
+}
+
+static char *split_and_write_hw_to_index (
+   char *word, char *data, int start, int end)
+{
+   char *p = word;
+   char *sep = NULL;
+
+   char *idx_data_sep = NULL;
+   size_t sep_len = 0;
+
+   if (!data && idxdat_separator){
+      idx_data_sep = strstr (word, idxdat_separator);
+      if (idx_data_sep){
+	 sep_len = strlen (idxdat_separator);
+	 idx_data_sep [0] = 0;
+
+	 data = idx_data_sep + sep_len;
+      }
+   }
+
+   do {
+      sep = NULL;
+      if (hw_separator [0] && !is_headword_special (word)){
+	 sep = strstr (p, hw_separator);
+	 if (sep)
+	    *sep = 0;
+      }
+
+      write_hw_to_index (trim_lr (p), data, start, end);
+
+      if (!sep)
+	 break;
+
+      p = sep + strlen (hw_separator);
+   }while (1);
+
+   return p;
 }
 
 static int contain_nonascii_symbol (const char *word)
@@ -496,7 +563,7 @@ static void update_alphabet (const char *word)
 
    len = strlen (word);
    p = (char *) alloca (len + 1);
-   tolower_alnumspace (word, p, allchars_mode, utf8_mode);
+   tolower_alnumspace (word, p, allchars_mode, cs_mode, utf8_mode);
 
    memset (&ps, 0, sizeof (ps));
 
@@ -513,14 +580,9 @@ static void update_alphabet (const char *word)
    }
 }
 
-static void fmt_newheadword( const char *word )
+/* return 1 if word should be skipped */
+static int fmt_newheadword_special (const char *word)
 {
-   static char prev[1024] = "";
-   static int  start = 0;
-   static int  end;
-   char *      sep   = NULL;
-   char *      p;
-
    if (
       word &&
       (!strcmp (word, "00-database-default-strategy") ||
@@ -528,7 +590,7 @@ static void fmt_newheadword( const char *word )
    {
       if (ignore_hw_def_strat){
 	 fmt_ignore_headword = 1;
-	 return;
+	 return 1;
       }
 
       /* we will ignore following occurences of 00-database-default-strategy*/
@@ -542,7 +604,7 @@ static void fmt_newheadword( const char *word )
    {
       if (ignore_hw_url){
 	 fmt_ignore_headword = 1;
-	 return;
+	 return 1;
       }
 
       /* we will ignore all the following occurences of 00-database-url*/
@@ -556,7 +618,7 @@ static void fmt_newheadword( const char *word )
    {
       if (ignore_hw_shortname){
 	 fmt_ignore_headword = 1;
-	 return;
+	 return 1;
       }
 
       /* we will ignore all the following occurences of 00-database-short*/
@@ -570,23 +632,42 @@ static void fmt_newheadword( const char *word )
    {
       if (ignore_hw_info){
 	 fmt_ignore_headword = 1;
-	 return;
+	 return 1;
       }
 
       /* we will ignore all the following occurences of 00-database-short*/
       ignore_hw_info = 1;
    }
 
-   update_alphabet (word);
+   return 0;
+}
 
-   fmt_ignore_headword = 0;
-
+static void fmt_test_nonascii (const char *word)
+{
    if (!bit8_mode && !utf8_mode){
       if (contain_nonascii_symbol (word)){
 	 fprintf (stderr, "\n8-bit head word \"%s\"is encountered while \"C\" locale is used\n", word);
 	 destroy_and_exit (1);
       }
    }
+}
+
+static void fmt_newheadword( const char *word )
+{
+   static char prev[1024] = "";
+   static int  start = 0;
+   static int  end;
+   char *      sep   = NULL;
+   char *      p;
+
+   if (fmt_newheadword_special (word))
+      return;
+
+   update_alphabet (word);
+
+   fmt_ignore_headword = 0;
+
+   fmt_test_nonascii (word);
 
    fmt_indent = 0;
 //   fmt_newline();
@@ -594,25 +675,7 @@ static void fmt_newheadword( const char *word )
    end = ftell(str);
 
    if (fmt_str && *prev) {
-      p = prev;
-      do {
-	 sep = NULL;
-	 if (hw_separator [0] &&
-	     strncmp (prev, "00-database", 11) &&
-	     strncmp (prev, "00database", 10))
-	 {
-	    sep = strstr (p, hw_separator);
-	    if (sep)
-	       *sep = 0;
-	 }
-
-	 write_hw_to_index (trim_lr (p), start, end);
-
-	 if (!sep)
-	    break;
-
-	 p = sep + strlen (hw_separator);
-      }while (1);
+      p = split_and_write_hw_to_index (prev, NULL, start, end);
    }
 
    if (word) {
@@ -638,14 +701,6 @@ static void fmt_newheadword( const char *word )
      fmt_string (p);
      fmt_newline();
    }
-
-   if (!quiet_mode){
-      if (fmt_hwcount && !(fmt_hwcount % 100)) {
-	 fprintf( stderr, "%10d headwords\r", fmt_hwcount );
-      }
-   }
-
-   ++fmt_hwcount;
 }
 
 static void fmt_closeindex( void )
@@ -665,9 +720,11 @@ static void fmt_closeindex( void )
 
 static void banner( FILE *out_stream )
 {
-   fprintf( out_stream, "dictfmt v. %s December 2000 \n", DICT_VERSION );
+   fprintf( out_stream, "dictfmt-%s\n", DICT_VERSION );
    fprintf( out_stream,
-         "Copyright 1997-2000 Rickard E. Faith (faith@cs.unc.edu)\n\n" );
+	    "Copyright 1997-2000 Rickard E. Faith (faith@cs.unc.edu)\n"
+	    "Copyright 2002-2007 Aleksey Cheusov (vle@gmx.net)\n"
+	    "\n");
 }
 
 static void license( void )
@@ -696,7 +753,8 @@ static void license( void )
 static void help( FILE *out_stream )
 {
    static const char *help_msg[] = {
-   "Usage: dictfmt [-c5|-t|-e|-f|-h|-j|-p|-i] -u url -s name [options] basename",
+   "Usage: dictfmt -c5|-t|-e|-f|-h|-j|-p [-u url] [-s name] [options] basename",
+   "       dictfmt -i|-I [options]",
    "Create a dictionary databse and index file for use by a dictd server",
    "",
      "-c5       headwords are preceded by a line containing at least \n\
@@ -727,10 +785,14 @@ static void help( FILE *out_stream )
                      several words to have the same definition\n\
                      Example: autumn%%%fall can be used\n\
                      if '--headword-separator %%%' is supplied",
+"--index-data-separator <sep> sets index/data separator which allows\n\
+                     to explicitely set fourth column in .index file,\n\
+                     the default is \"\\034\"",
 "--break-headwords    multiple headwords will be written on separate lines\n\
                      in the .dict file.  For use with '--headword-separator.",
 "--index-keep-orig    fourth column in .index file stores original headword\n\
                      which is returned by MATCH command",
+"--case-sensitive     Create .index/.dict files for case sensitive search",
 "--without-headword   headwords will not be copied to .dict file",
 "--without-header     header will not be copied to DB info entry",
 "--without-url        URL will not be copied to DB info entry",
@@ -747,6 +809,7 @@ static void help( FILE *out_stream )
 "--mime-header       Sets MIME header stored in .data file which\n\
                     prepend definition\n\
                     when client sent OPTION MIME to `dictd'",
+"--without-ver      do not create 00-database-dictfmt-<VER> entry in .index",
       0 };
    const char        **p = help_msg;
 
@@ -943,6 +1006,28 @@ static void fmt_headword_for_allchars (void)
    }
 }
 
+static void fmt_headword_for_casesensitive (void)
+{
+   if (cs_mode){
+      fmt_newheadword("00-database-case-sensitive");
+      fmt_newline();
+   }
+}
+
+static void fmt_headword_for_dictfmt_ver (void)
+{
+   char ver [200];
+   char *p;
+   snprintf (ver, sizeof (ver),
+	     "00-database-dictfmt-%s", DICT_VERSION);
+
+   if (dictfmt_ver_mode){
+      fmt_newheadword (ver);
+      fmt_string (ver);
+      fmt_newline ();
+   }
+}
+
 /* ...before reading the input */
 static void fmt_predefined_headwords_before ()
 {
@@ -952,8 +1037,10 @@ static void fmt_predefined_headwords_before ()
    fmt_headword_for_utf8 ();
    fmt_headword_for_8bit ();
    fmt_headword_for_allchars ();
+   fmt_headword_for_casesensitive ();
    fmt_headword_for_def_strat ();
    fmt_headword_for_MIME_header ();
+   fmt_headword_for_dictfmt_ver ();
 
    if (url != string_unknown){
       /*
@@ -985,18 +1072,30 @@ static void fmt_predefined_headwords_after ()
    fmt_headword_for_alphabet ();
 }
 
+static int xatoi (const char *nptr)
+{
+   char *end;
+   long ret = strtol (nptr, &end, 10);
+   if (end == nptr || end [0] != 0)
+      err_fatal (__FUNCTION__, "bad decimal '%s'\n", nptr);
+
+   return (int) ret;
+}
+
 int main( int argc, char **argv )
 {
    int        c;
    char       buffer[BSIZE];
    char       buffer2[BSIZE];
-   char       indexname[1024];
-   char       dataname[1024];
+   char       indexname[1024]="/nonexistentfile.index";
+   char       dataname[1024]="/nonexistentfile.data";
 
    int        header = 0;
    char       *pt;
    char       *s, *d;
    unsigned char *buf;
+
+   const char *basename = NULL;
 
    struct option      longopts[]  = {
       { "help",       0, 0, 501 },
@@ -1018,11 +1117,15 @@ int main( int argc, char **argv )
       { "mime-header",          1, 0, 513 },
       { "utf8",                 0, 0, 514 },
       { "index-keep-orig",      0, 0, 515 },
+      { "case-sensitive",       0, 0, 516 },
+      { "index-data-separator", 1, 0, 517 },
+      { "without-ver",          0, 0, 518 },
+      { NULL,                   0, 0, 0   },
    };
 
    init (argv[0]);
 
-   while ((c = getopt_long( argc, argv, "qVLjvfepihDu:s:c:t",
+   while ((c = getopt_long( argc, argv, "qVLjvfepiIhDu:s:c:t",
                                     longopts, NULL )) != EOF)
       switch (c) {
       case 'q': quiet_mode = 1;            break;
@@ -1039,7 +1142,13 @@ int main( int argc, char **argv )
       case 'f': type = FOLDOC;             break;
       case 'e': type = EASTON;             break;
       case 'p': type = PERIODIC;           break;
-      case 'i': type = INDEXONLY;           break;
+      case 'i':
+	 type = INDEXONLY;
+	 break;
+      case 'I':
+	 type = INDEXONLY;
+	 indexonly_base64 = 1;
+	 break;
       case 'h':
 	 type = HITCHCOCK;
 	 without_hw = 1;
@@ -1091,6 +1200,16 @@ int main( int argc, char **argv )
       case 515:
 	 index_keep_orig_mode = 1;
 	 break;
+      case 516:
+	 cs_mode = 1;
+	 break;
+      case 517:
+	 idxdat_separator = optarg;
+	 break;
+      case 518:
+	 dictfmt_ver_mode = 0;
+	 break;
+
       case 't':
 	 without_info = 1;
 	 without_hw   = 1;
@@ -1104,10 +1223,14 @@ int main( int argc, char **argv )
 	 destroy_and_exit (1);
       }
 
-   if (optind + 1 != argc) {
-      help (stderr);
+   if (type != INDEXONLY) {
+      if (optind + 1 != argc) {
+	 help (stderr);
 
-      destroy_and_exit (1);
+	 destroy_and_exit (1);
+      }
+
+      basename = argv [optind];
    }
 
    if (locale)
@@ -1115,20 +1238,23 @@ int main( int argc, char **argv )
 
    setenv("LC_ALL", "C", 1); /* this is for 'sort' subprocess */
 
-   if (
-      -1 == snprintf (
-	 indexname, sizeof (indexname), "%s.index", argv[optind] )||
-      -1 == snprintf (
-	 dataname,  sizeof (dataname), "%s.dict", argv[optind] ))
-   {
-      err_fatal (__FUNCTION__, "Too long filename\n");
+   if (!basename){
+      fmt_openindex (NULL);
+   }else{
+      if (-1 == snprintf (
+	     indexname, sizeof (indexname), "%s.index", basename )||
+	  -1 == snprintf (
+	     dataname,  sizeof (dataname), "%s.dict", basename ))
+      {
+	 err_fatal (__FUNCTION__, "Too long filename\n");
+      }
+
+      fmt_openindex( indexname );
    }
 
-   fmt_openindex( indexname );
-   if (Debug) {
-      str = stdout;
-   } else if (type != INDEXONLY){
-      if (!(str = fopen(dataname, "w"))) {
+//   str = stdout;
+   if (basename && !Debug){
+      if (!(str = fopen (dataname, "w"))) {
 	 fprintf(stderr, "Cannot open %s for write\n", dataname);
 
 	 destroy_and_exit (1);
@@ -1345,6 +1471,7 @@ int main( int argc, char **argv )
 	    const char *headword = NULL;
 	    const char *offset   = NULL;
 	    const char *size     = NULL;
+	    const char *data     = NULL;
 
 	    size_t len = strlen (buffer);
 
@@ -1363,16 +1490,27 @@ int main( int argc, char **argv )
 	       exit (1);
 	    }
 
-	    size = strtok (NULL, "\t");
+	    size = strtok (NULL, "\t\n");
 	    if (!size){
 	       fprintf (stderr, "strtok failed 3\n");
 	       exit (1);
 	    }
 
-	    i_offset = atoi (offset);
-	    i_size   = atoi (size);
+	    data = strtok (NULL, "\n");
 
-	    write_hw_to_index (headword, i_offset, i_offset + i_size);
+	    if (indexonly_base64){
+	       i_offset = (int) b64_decode (offset);
+	    }else{
+	       i_offset = xatoi (offset);
+	    }
+
+	    if (indexonly_base64){
+	       i_size = (int) b64_decode (offset);
+	    }else{
+	       i_size = xatoi (size);
+	    }
+
+	    write_hw_to_index (headword, data, i_offset, i_offset + i_size);
 	 }
 	 break;
       default:

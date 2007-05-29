@@ -16,9 +16,6 @@
  * You should have received a copy of the GNU General Public License along
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
- * 
- * $Id: strategy.c,v 1.8 2005/11/19 21:59:53 cheusov Exp $
- * 
  */
 
 #include "dictP.h"
@@ -41,8 +38,10 @@ static dictStrategy strategyInfo[] = {
    {"re",        "POSIX 1003.2 (modern) regular expressions",  DICT_STRAT_RE },
    {"regexp",    "Old (basic) regular expressions",            DICT_STRAT_REGEXP },
    {"soundex",   "Match using SOUNDEX algorithm",              DICT_STRAT_SOUNDEX },
-   {"lev", "Match headwords within Levenshtein distance one",  DICT_STRAT_LEVENSHTEIN },
-   {"word", "Match separate words within headwords",           DICT_STRAT_WORD },
+   {"lev",       "Match headwords within Levenshtein distance one",  DICT_STRAT_LEVENSHTEIN },
+   {"word",      "Match separate words within headwords", DICT_STRAT_WORD },
+   {"first",     "Match the first word within headwords", DICT_STRAT_FIRST },
+   {"last",      "Match the last word within headwords",  DICT_STRAT_LAST },
 };
 #define STRATEGIES (sizeof(strategyInfo)/sizeof(strategyInfo[0]))
 

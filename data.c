@@ -16,9 +16,6 @@
  * You should have received a copy of the GNU General Public License along
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
- * 
- * $Id: data.c,v 1.24 2004/10/12 12:55:14 cheusov Exp $
- * 
  */
 
 #include "dictP.h"
@@ -36,6 +33,8 @@
 #ifdef HAVE_MMAP
 #include <sys/mman.h>
 #endif
+
+#include <sys/stat.h>
 
 #define USE_CACHE 1
 

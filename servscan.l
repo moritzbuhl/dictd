@@ -16,9 +16,6 @@
  * You should have received a copy of the GNU General Public License along
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
- * 
- * $Id: servscan.l,v 1.26 2005/04/14 07:52:16 cheusov Exp $
- * 
  */
 
 %option stack debug
@@ -103,7 +100,12 @@ postfilter                  RETURN(TOKEN_POSTFILTER);
 name                        RETURN(TOKEN_NAME);
 user                        RETURN(TOKEN_USER);
 authonly                    RETURN(TOKEN_AUTHONLY);
+
 site                        RETURN(TOKEN_SITE);
+site_no_banner              RETURN(TOKEN_SITE_NO_BANNER);
+site_no_uptime              RETURN(TOKEN_SITE_NO_UPTIME);
+site_no_dblist              RETURN(TOKEN_SITE_NO_DBLIST);
+
 invisible                   RETURN(TOKEN_INVISIBLE);
 database_virtual            RETURN(TOKEN_DATABASE_VIRTUAL);
 info                        RETURN(TOKEN_INFO);
@@ -121,7 +123,6 @@ global                      RETURN(TOKEN_GLOBAL);
 port                        RETURN(TOKEN_PORT);
 delay                       RETURN(TOKEN_DELAY);
 depth                       RETURN(TOKEN_DEPTH);
-limit                       RETURN(TOKEN_LIMIT);
 timestamp                   RETURN(TOKEN_TIMESTAMP);
 log_option                  RETURN(TOKEN_LOG_OPTION);
 debug_option                RETURN(TOKEN_DEBUG_OPTION);
@@ -134,6 +135,13 @@ log_file                    RETURN(TOKEN_LOG_FILE);
 pid_file                    RETURN(TOKEN_PID_FILE);
 fast_start                  RETURN(TOKEN_FAST_START);
 without_mmap                RETURN(TOKEN_WITHOUT_MMAP);
+
+limit                       RETURN(TOKEN_LIMIT_CHILDS);
+limit_childs                RETURN(TOKEN_LIMIT_CHILDS);
+limit_matches               RETURN(TOKEN_LIMIT_MATCHES);
+limit_definitions           RETURN(TOKEN_LIMIT_DEFS);
+limit_time                  RETURN(TOKEN_LIMIT_TIME);
+limit_queries               RETURN(TOKEN_LIMIT_QUERIES);
 
 {integer}                   { yylval.token.integer = atoi(yytext);
                               RETURN(TOKEN_NUMBER);

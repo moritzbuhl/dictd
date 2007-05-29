@@ -16,9 +16,6 @@
  * You should have received a copy of the GNU General Public License along
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
- * 
- * $Id: dictzip.c,v 1.26 2004/11/17 12:39:44 cheusov Exp $
- * 
  */
 
 #include "dictzip.h"
@@ -300,7 +297,7 @@ int dict_data_zip( const char *inFilename, const char *outFilename,
    return 0;
 }
 
-static const char *id_string( const char *id )
+static const char *id_string (void)
 {
    static char buffer[BUFFERSIZE];
    char        *pt;
@@ -313,9 +310,7 @@ static const char *id_string( const char *id )
 
 static void banner( void )
 {
-   const char *id = "$Id: dictzip.c,v 1.26 2004/11/17 12:39:44 cheusov Exp $";
-   
-   fprintf( stderr, "%s %s\n", err_program_name(), id_string( id ) );
+   fprintf( stderr, "%s %s\n", err_program_name (), id_string () );
    fprintf( stderr,
 	    "Copyright 1996-2002 Rickard E. Faith (faith@dict.org)\n\n" );
 }
