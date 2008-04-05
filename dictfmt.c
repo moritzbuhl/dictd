@@ -155,7 +155,7 @@ static void destroy (void)
    str_pool_destroy (alphabet_pool);
    alphabet_pool = NULL;
 
-//   maa_shutdown ();
+/*   maa_shutdown ();*/
 }
 
 static void destroy_and_exit (int exit_status)
@@ -215,8 +215,8 @@ static void fmt_wrap_and_print (const char *s)
    if (utf8_mode){
       len = mbswidth_ (s);
       if (len == (size_t) -1)
-	 err_fatal (__FUNCTION__, "'%s' is not a valid utf-8 string\n", s);
-/*	 err_fatal (__FUNCTION__, "'%s' is not a valid utf-8 string or contains non-printable symbols\n", s);*/
+	 err_fatal (__func__, "'%s' is not a valid utf-8 string\n", s);
+/*	 err_fatal (__func__, "'%s' is not a valid utf-8 string or contains non-printable symbols\n", s);*/
    }else{
       len = strlen (s);
    }
@@ -655,11 +655,20 @@ static void fmt_test_nonascii (const char *word)
 
 static void fmt_newheadword( const char *word )
 {
-   static char prev[1024] = "";
+   static char *prev      = NULL;
+   static size_t prev_len = 0;
+   size_t word_len        = 0;
+
    static int  start = 0;
    static int  end;
    char *      sep   = NULL;
    char *      p;
+
+   if (!prev){
+      prev_len = 1000;
+      prev = xmalloc (prev_len);
+      prev [0] = 0;
+   }
 
    if (fmt_newheadword_special (word))
       return;
@@ -671,7 +680,6 @@ static void fmt_newheadword( const char *word )
    fmt_test_nonascii (word);
 
    fmt_indent = 0;
-//   fmt_newline();
    fflush(stdout);
    end = ftell(str);
 
@@ -680,7 +688,14 @@ static void fmt_newheadword( const char *word )
    }
 
    if (word) {
-      strlcpy(prev, word, sizeof (prev));
+      /* copy word to prev */
+      word_len = strlen (word);
+      if (word_len > prev_len){
+	 prev_len = word_len;
+	 prev = xrealloc (prev, word_len + 1);
+      }
+
+      strcpy(prev, word);
       start = end;
    }
 
@@ -835,7 +850,7 @@ static void set_utf8bit_mode (const char *locale_)
 #if !HAVE_UTF8
    if (utf8_mode){
       err_fatal (
-	 __FUNCTION__,
+	 __func__,
 	 "utf-8 support was disabled at compile time\n");
    }
 #endif
@@ -1078,7 +1093,7 @@ static int xatoi (const char *nptr)
    char *end;
    long ret = strtol (nptr, &end, 10);
    if (end == nptr || end [0] != 0)
-      err_fatal (__FUNCTION__, "bad decimal '%s'\n", nptr);
+      err_fatal (__func__, "bad decimal '%s'\n", nptr);
 
    return (int) ret;
 }
@@ -1247,13 +1262,12 @@ int main( int argc, char **argv )
 	  -1 == snprintf (
 	     dataname,  sizeof (dataname), "%s.dict", basename ))
       {
-	 err_fatal (__FUNCTION__, "Too long filename\n");
+	 err_fatal (__func__, "Too long filename\n");
       }
 
       fmt_openindex( indexname );
    }
 
-//   str = stdout;
    if (basename && !Debug){
       if (!(str = fopen (dataname, "w"))) {
 	 fprintf(stderr, "Cannot open %s for write\n", dataname);
@@ -1264,7 +1278,7 @@ int main( int argc, char **argv )
 
    fmt_predefined_headwords_before ();
 
-   while (fgets(buf = buffer,BSIZE-1,stdin)) {
+   while (buf = (unsigned char *) buffer, fgets (buffer, BSIZE-1, stdin)) {
       if (strlen(buffer))
 	 buffer[strlen(buffer)-1] = '\0'; /* remove newline */
       
@@ -1280,13 +1294,6 @@ int main( int argc, char **argv )
 	       *pt = '\0';
 	       fmt_newheadword(buffer2);
 	       *pt = ',';
-
-//	       fprintf (stderr, "HW=`%s`\n", buffer2);
-//	       if (*pt == '\n')
-//		  ++pt;
-//	       fprintf (stderr, "DEF=`%s`\n", pt);
-
-//	       buf = pt;
 	    }
 	 }
 	 break;
@@ -1452,17 +1459,17 @@ int main( int argc, char **argv )
 	 if (*buffer == '@') {
 	    buf++;
 	 } else if (strncmp(buffer, "_____",5) == 0) {
-	    fgets(buf = buffer,BSIZE-1,stdin); /* empty line */
-	    
-	    fgets(buf = buffer,BSIZE-1,stdin);
+	    buf = (unsigned char *) buffer;
+	    fgets (buffer,BSIZE-1,stdin); /* empty line */
+	    fgets (buffer,BSIZE-1,stdin);
 	    if (strlen(buffer))
 	       buffer[strlen(buffer)-1] = '\0'; /* remove newline */
 
-	    buf = trim_left (buf);
+	    buf = (unsigned char *) trim_left (buffer);
 
 	    if (*buf != '\0') {
 	       fmt_indent = 0;
-	       fmt_newheadword (buf);
+	       fmt_newheadword ((const char *) buf);
 	       continue;
 	    }
  	 }
@@ -1520,10 +1527,10 @@ int main( int argc, char **argv )
 	 destroy_and_exit (2);
       }
       if (buf){
-	 fmt_string(buf);
+	 fmt_string ((const char *) buf);
 	 fmt_indent = 0;
-	 fmt_newline();
-//	 fmt_indent = FMT_INDENT;
+	 fmt_newline ();
+/*	 fmt_indent = FMT_INDENT; */
       }
    skip:;
    }

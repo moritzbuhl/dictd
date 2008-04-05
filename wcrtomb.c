@@ -13,10 +13,11 @@
 #include <stdlib.h>
 #include <assert.h>
 
-size_t wcrtomb__ (char *s, wchar_t wc, mbstate_t *ps)
+size_t wcrtomb__ (char *s, wchar_t wc_, mbstate_t *ps)
 {
    int i;
    int octet_count = 1;
+   long wc = wc_;
 
    assert (s);
    assert (wc);
@@ -44,8 +45,6 @@ size_t wcrtomb__ (char *s, wchar_t wc, mbstate_t *ps)
 /* invalid UCS4 character */
 	 return (size_t) -1;
       }
-
-//      s [octet_count] = 0;
 
       for (i = octet_count-1; i--; ){
 	 s [i + 1] = 0x80 | (wc & 0x3F);

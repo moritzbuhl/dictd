@@ -28,6 +28,7 @@ extern int         yy_flex_debug;
        FILE        *dict_output;
        FILE        *dict_error;
        int         formatted;
+       int         flush;
 
 const char *host_connected    = NULL;
 const char *service_connected = NULL;
@@ -266,7 +267,7 @@ static lst_List client_read_text( int s )
    }
    if (len < 0) {
        client_close_pager();
-       err_fatal_errno( __FUNCTION__, "Error reading from socket\n" );
+       err_fatal_errno( __func__, "Error reading from socket\n" );
    }
    return l;
 }
@@ -367,7 +368,7 @@ static void client_print_matches( lst_List l, int flag, const char *word )
       last = e;
       a = arg_argify( e, 0 );
       if (arg_count(a) != 2)
-	 err_internal( __FUNCTION__,
+	 err_internal( __func__,
 		       "MATCH command didn't return 2 args: \"%s\"\n", e );
 
       arg0 = arg_get (a,0);
@@ -426,7 +427,7 @@ static void client_print_listed( lst_List l )
       /* */
       a = arg_argify( e, 0 );
       if (arg_count(a) != 2)
-	 err_internal( __FUNCTION__,
+	 err_internal( __func__,
 		       "SHOW command didn't return 2 args: \"%s\"\n", e );
 
       len = strlen (arg_get (a,0));
@@ -496,7 +497,7 @@ static int client_read_status( int s,
 
    if ((len = net_read( s, buf, BUFFERSIZE )) < 0) {
       client_close_pager();
-      err_fatal_errno( __FUNCTION__, "Error reading from socket\n" );
+      err_fatal_errno( __func__, "Error reading from socket\n" );
    }
    client_bytes += len;
    PRINTF(DBG_RAW,("* Read: %s\n",buf));
@@ -607,7 +608,7 @@ static struct cmd *make_command( int command, ... )
    case CMD_OPTION_MIME:
       break;
    default:
-      err_internal( __FUNCTION__, "Illegal command %d\n", command );
+      err_internal( __func__, "Illegal command %d\n", command );
    }
    va_end( ap );
 
@@ -702,7 +703,7 @@ static void request( void )
       case CMD_CLOSE:  snprintf( b, BUFFERSIZE, "quit\n" );           break;
       case CMD_OPTION_MIME: snprintf( b, BUFFERSIZE, "option mime\n" );    break;
       default:
-	 err_internal( __FUNCTION__, "Unknown command %d\n", c->command );
+	 err_internal( __func__, "Unknown command %d\n", c->command );
       }
       len = strlen(b);
       if (total + len + 3 > client_pipesize) {
@@ -727,7 +728,7 @@ end:				/* Ready to send buffer, but are we
    if (!cmd_reply.s) {
       c = lst_top(cmd_list);
       if (c->command != CMD_CONNECT) {
-	 err_internal( __FUNCTION__, "Not connected, but no CMD_CONNECT\n" );
+	 err_internal( __func__, "Not connected, but no CMD_CONNECT\n" );
       }
       if ((cmd_reply.s = net_connect_tcp( c->host,
 					     c->service
@@ -807,6 +808,10 @@ static void process( void )
 	 else
 	    client_print_text( cmd_reply.data, 1 );
 
+	 if (flush){
+	    fflush (dict_output);
+	 }
+
 	 client_free_text( cmd_reply.data );
 	 cmd_reply.data = NULL;
 	 cmd_reply.matches = cmd_reply.match = cmd_reply.listed = 0;
@@ -822,6 +827,11 @@ static void process( void )
 	    }
 	    for (i = 0; i < cmd_reply.count; i++) {
 	       client_print_definitions (&cmd_reply.defs [i]);
+
+	       if (flush){
+		  fflush (dict_output);
+	       }
+
 	       client_free_text( cmd_reply.defs[i].data );
 	       cmd_reply.defs[i].data = NULL;
 	    }
@@ -838,6 +848,10 @@ static void process( void )
 	    dict_output = dict_error;
 	    client_print_matches( cmd_reply.data, 0, c->word );
 	    dict_output = old;
+
+	    if (flush){
+	       fflush (dict_output);
+	    }
 
 	    client_free_text( cmd_reply.data );
 	    cmd_reply.data = NULL;
@@ -898,7 +912,7 @@ static void process( void )
 	    fprintf( dict_error, "Client command gave unexpected status code %d (%s)\n",
 		    cmd_reply.retcode, message ? message : "no message" );
 
-//	 set_ex_status (cmd_reply.retcode);
+/*	 set_ex_status (cmd_reply.retcode); */
 
 	 expected = cmd_reply.retcode;
 	 break;
@@ -1075,7 +1089,7 @@ static void process( void )
 	    int empty_line_found = 0;
 
 	    if (!cmd_reply.data)
-	       err_internal( __FUNCTION__,
+	       err_internal( __func__,
 			     "%d matches, but no list\n", cmd_reply.matches );
 
 	    for (i = cmd_reply.matches; i > 0; --i) {
@@ -1096,7 +1110,7 @@ static void process( void )
 	       /* */
 	       a = arg_argify( line, 0 );
 	       if (arg_count(a) != 2)
-		  err_internal( __FUNCTION__,
+		  err_internal( __func__,
 				"MATCH command didn't return 2 args: \"%s\"\n",
 				line );
 
@@ -1142,7 +1156,7 @@ static void process( void )
 	 expected = CODE_GOODBYE;
 	 break;
       default:
-	 err_internal( __FUNCTION__, "Illegal command %d\n", c->command );
+	 err_internal( __func__, "Illegal command %d\n", c->command );
       }
       if (cmd_reply.s && cmd_reply.retcode != expected) {
          client_close_pager();
@@ -1169,9 +1183,9 @@ static void handler( int sig )
    }
 
    if (name)
-      err_fatal( __FUNCTION__, "Caught %s, exiting\n", name );
+      err_fatal( __func__, "Caught %s, exiting\n", name );
    else
-      err_fatal( __FUNCTION__, "Caught signal %d, exiting\n", sig );
+      err_fatal( __func__, "Caught signal %d, exiting\n", sig );
 
    exit(0);
 }
@@ -1234,8 +1248,11 @@ static const char *client_get_banner( void )
 static void banner( FILE *out_stream )
 {
    fprintf( out_stream , "%s\n", client_get_banner() );
+   fprintf( out_stream, 
+	    "Copyright 1997-2002 Rickard E. Faith (faith@dict.org)\n" );
    fprintf( out_stream,
-	    "Copyright 1997-2002 Rickard E. Faith (faith@dict.org)\n\n" );
+	    "Copyright 2002-2007 Aleksey Cheusov (vle@gmx.net)\n" );
+   fprintf( out_stream, "\n" );
 }
 
 static void license( void )
@@ -1350,6 +1367,7 @@ int main( int argc, char **argv )
       { "client",     1, 0, 505 },
       { "mime",       1, 0, 'M' },
       { "formatted",  0, 0, 'f' },
+      { "flush",      0, 0, 'F' },
       { 0,            0, 0,  0  }
    };
 
@@ -1368,7 +1386,7 @@ int main( int argc, char **argv )
    dbg_register( DBG_URL,     "url" );
 
    while ((c = getopt_long( argc, argv,
-			    "h:p:d:i:Ims:DSHau:c:Ck:VLvrP:Mf",
+			    "h:p:d:i:Ims:DSHau:c:Ck:VLvrP:MfF",
 			    longopts, NULL )) != EOF)
    {
       switch (c) {
@@ -1403,6 +1421,7 @@ int main( int argc, char **argv )
       case 502: dbg_set( optarg );                     break;
       case 501:	help( stdout );	exit(1);               break;	      
       case 'f': formatted = 1;                         break;
+      case 'F': flush = 1;                         break;
       default:  help( stderr ); exit(1);               break;
       }
    }

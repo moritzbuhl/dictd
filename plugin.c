@@ -102,7 +102,7 @@ int dict_search_plugin (
 	 PRINTF (DBG_SEARCH, (":S:     preprocessing\n"));
 	 break;
       default:
-	 err_fatal (__FUNCTION__, "invalid pligin's exit status\n");
+	 err_fatal (__func__, "invalid pligin's exit status\n");
       }
 
       for (i = 0; i < defs_count; ++i){
@@ -185,7 +185,7 @@ static int plugin_initdata_set_data_file (
    dictWord *dw;
 
    if (data_size <= 0)
-      err_fatal (__FUNCTION__, "invalid initial array size");
+      err_fatal (__func__, "invalid initial array size");
 
    list = lst_create ();
 
@@ -218,7 +218,7 @@ static int plugin_initdata_set_data_array (
    const dictDatabase *db)
 {
    if (data_size <= 0)
-      err_fatal (__FUNCTION__, "invalid initial array size");
+      err_fatal (__func__, "invalid initial array size");
 
    if (db -> plugin_data){
       data [0].id   = DICT_PLUGIN_INITDATA_DICT;
@@ -251,14 +251,14 @@ static int plugin_initdata_set_dbnames (dictPluginData *data, int data_size)
    int i;
 
    if (data_size <= 0)
-      err_fatal (__FUNCTION__, "too small initial array");
+      err_fatal (__func__, "too small initial array");
 
    count = lst_length (DictConfig -> dbl);
    if (count == 0)
       return 0;
 
    if (count > data_size)
-      err_fatal (__FUNCTION__, "too small initial array");
+      err_fatal (__func__, "too small initial array");
 
    for (i = 1; i <= count; ++i){
       db = (const dictDatabase *)(lst_nth_get (DictConfig -> dbl, i));
@@ -290,7 +290,7 @@ static int plugin_initdata_set_stratnames (
    dictPluginData_strategy datum;
 
    if (data_size <= 0)
-      err_fatal (__FUNCTION__, "too small initial array");
+      err_fatal (__func__, "too small initial array");
 
    count = get_strategy_count ();
    assert (count > 0);
@@ -308,7 +308,7 @@ static int plugin_initdata_set_stratnames (
 	    strlen (strats [i] -> name) + 1 >
 	    sizeof (datum.name))
 	 {
-	    err_fatal (__FUNCTION__, "too small initial array");
+	    err_fatal (__func__, "too small initial array");
 	 }
 
 	 datum.number = strats [i] -> number;
@@ -330,7 +330,7 @@ static int plugin_initdata_set_stratnames (
 static int plugin_initdata_set_defdbdir (dictPluginData *data, int data_size)
 {
    if (data_size <= 0)
-      err_fatal (__FUNCTION__, "too small initial array");
+      err_fatal (__func__, "too small initial array");
 
    data -> size = -1;
    data -> data = xstrdup (DICT_DICTIONARY_PATH);
@@ -343,7 +343,7 @@ static int plugin_initdata_set_alphabet_8bit (
    dictPluginData *data, int data_size)
 {
    if (data_size <= 0)
-      err_fatal (__FUNCTION__, "too small initial array");
+      err_fatal (__func__, "too small initial array");
 
    data -> size = -1;
    data -> data = xstrdup (global_alphabet_8bit);
@@ -356,7 +356,7 @@ static int plugin_initdata_set_alphabet_ascii (
    dictPluginData *data, int data_size)
 {
    if (data_size <= 0)
-      err_fatal (__FUNCTION__, "too small initial array");
+      err_fatal (__func__, "too small initial array");
 
    data -> size = -1;
    data -> data = xstrdup (global_alphabet_ascii);
@@ -446,7 +446,7 @@ static char *dict_plugin_filename (
 
    if (p [0] != '.' && p [0] != '/'){
       if (sizeof (filename) < strlen (DICT_PLUGIN_PATH) + strlen (p) + 1)
-	 err_fatal (__FUNCTION__, "too small initial array\n");
+	 err_fatal (__func__, "too small initial array\n");
 
       strcpy (filename, DICT_PLUGIN_PATH);
       strcat (filename, p);
@@ -470,12 +470,12 @@ static void dict_plugin_test (dictPlugin *plugin, int version, int ret)
 
       if (err_msg){
 	 err_fatal (
-	    __FUNCTION__,
+	    __func__,
 	    "%s\n",
 	    plugin -> dictdb_error (plugin -> data));
       }else{
 	 err_fatal (
-	    __FUNCTION__,
+	    __func__,
 	    "Error code %i\n", ret);
       }
    }
@@ -486,11 +486,11 @@ static void dict_plugin_test (dictPlugin *plugin, int version, int ret)
 /*
    case 1:
       if (!i -> plugin -> dictdb_set)
-	 err_fatal (__FUNCTION__, "'%s' function is not found\n", DICT_PLUGINFUN_SET);
+	 err_fatal (__func__, "'%s' function is not found\n", DICT_PLUGINFUN_SET);
       break;
 */
    default:
-      err_fatal (__FUNCTION__, "Invalid version returned by plugin\n");
+      err_fatal (__func__, "Invalid version returned by plugin\n");
    }
 }
 
@@ -498,17 +498,17 @@ static void dict_plugin_dlsym (dictPlugin *plugin)
 {
    PRINTF(DBG_INIT, (":I:     getting functions addresses\n"));
 
-   plugin -> dictdb_open   =
+   plugin -> dictdb_open   = (dictdb_open_type)
       lt_dlsym (plugin -> handle, DICT_PLUGINFUN_OPEN);
-   plugin -> dictdb_free   =
+   plugin -> dictdb_free   = (dictdb_free_type)
       lt_dlsym (plugin -> handle, DICT_PLUGINFUN_FREE);
-   plugin -> dictdb_search =
+   plugin -> dictdb_search = (dictdb_search_type)
       lt_dlsym (plugin -> handle, DICT_PLUGINFUN_SEARCH);
-   plugin -> dictdb_close  =
+   plugin -> dictdb_close  = (dictdb_close_type)
       lt_dlsym (plugin -> handle, DICT_PLUGINFUN_CLOSE);
-   plugin -> dictdb_error  =
+   plugin -> dictdb_error  = (dictdb_error_type)
       lt_dlsym (plugin -> handle, DICT_PLUGINFUN_ERROR);
-   plugin -> dictdb_set   =
+   plugin -> dictdb_set   = (dictdb_set_type)
       lt_dlsym (plugin -> handle, DICT_PLUGINFUN_SET);
 
    if (!plugin -> dictdb_open ||
@@ -586,7 +586,7 @@ int dict_plugin_init (dictDatabase *db)
       case 0:
 	 break;
       default:
-	 err_internal( __FUNCTION__, "Corrupted .index file'\n" );
+	 err_internal( __func__, "Corrupted .index file'\n" );
       }
 
       dict_destroy_list (list);

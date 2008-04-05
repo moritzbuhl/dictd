@@ -59,7 +59,6 @@ static int dict_search_lev_8bit (
 
    LEV_VARS
 
-//   fprintf (stderr, "dict_search_lev_8bit\n");
    assert (alphabet);
 
    DICT_SEARCH_LEVENSHTEIN_8BIT__DEL_TRANS(buf, word, args)
@@ -130,7 +129,6 @@ static int dict_search_lev_utf8 (
 
    LEV_VARS
 
-//   fprintf (stderr, "dict_search_lev_utf8\n");
    assert (alphabet);
 
    memset (&ps, 0, sizeof (ps));
@@ -141,7 +139,7 @@ static int dict_search_lev_utf8 (
    i = 0;
    for (p = word; *p; ){
       char_len = mbrlen__ (p, MB_CUR_MAX__, &ps);
-      assert (char_len > 0);
+      assert ((long) char_len > 0);
 
       buf3 = buf2 + i * (MB_CUR_MAX__ + 1);
       memcpy (buf3, p, char_len);
@@ -170,7 +168,7 @@ static int dict_search_lev_utf8 (
    while (*p){
       char_len = mbrlen__ (p, MB_CUR_MAX__, &ps);
       if (char_len == (size_t) -1)
-	 err_internal (__FUNCTION__, "Alphabet is not a valid utf-8 string\n");
+	 err_internal (__func__, "Alphabet is not a valid utf-8 string\n");
 
       memcpy (d, p, char_len);
       d [char_len] = 0;
@@ -194,7 +192,7 @@ static int dict_search_lev_utf8 (
       while (*p){
 	 char_len = mbrlen__ (p, MB_CUR_MAX__, &ps);
 	 if (char_len == (size_t) -1)
-	    err_internal (__FUNCTION__, "Alphabet is not a valid utf-8 string\n");
+	    err_internal (__func__, "Alphabet is not a valid utf-8 string\n");
 
 	 memcpy (d, p, char_len);
 	 p += char_len;
@@ -208,7 +206,7 @@ static int dict_search_lev_utf8 (
 #if 1
 	 d2 = d + char_len;
 	 char_len = mbrlen__ (d2, MB_CUR_MAX__, &ps);
-	 assert (char_len >= 0);
+	 assert ((long) char_len >= 0);
 
 	 while ((d2 [0] = d2 [char_len]) != 0){
 	    ++d2;

@@ -18,6 +18,9 @@
    */
 #undef HAVE_ALLOCA_H
 
+/* Define to 1 if you have the <ctype.h> header file. */
+#undef HAVE_CTYPE_H
+
 /* Define to 1 if you have the declaration of `CODESET', and to 0 if you
    don't. */
 #undef HAVE_DECL_CODESET
@@ -30,6 +33,9 @@
 
 /* Define to 1 if you don't have `vprintf' but do have `_doprnt.' */
 #undef HAVE_DOPRNT
+
+/* Define to 1 if you have the `fileno' function. */
+#undef HAVE_FILENO
 
 /* Define to 1 if you have the `fork' function. */
 #undef HAVE_FORK

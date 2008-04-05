@@ -230,7 +230,7 @@ extern int mbtowc__ (wchar_t *pwc, const char *s, size_t n);
         waitpid(-1, (status),(options))
 #endif
 
-#if USE_PLUGIN
+#ifdef USE_PLUGIN
 # if HAVE_DLFCN_H
 #  include <dlfcn.h>
    typedef void *  lt_dlhandle;
@@ -269,11 +269,10 @@ extern int mbtowc__ (wchar_t *pwc, const char *s, size_t n);
 /* We actually need a few non-ANSI C things... */
 #if defined(__STRICT_ANSI__)
 extern char     *strdup( const char * );
+#if !HAVE_FILENO
 extern int      fileno( FILE *stream );
+#endif
 extern FILE     *fdopen( int fildes, const char *mode );
-extern void     bcopy( const void *src, void *dest, int n );
-extern long int random( void );
-extern void     srandom( unsigned int );
 #endif
 
 #if HAVE_SYS_RESOURCE_H
@@ -320,8 +319,9 @@ int getopt_long(int argc, char * const argv[],
                   const struct option *longopts, int *longindex);
 extern int  optind;
 extern char *optarg;
-#endif
-#endif
+#endif /* HAVE_GETOPT_LONG */
+
+#endif /* HAVE_GETOPT_H */
 
 				/* Local stuff */
 #ifndef max

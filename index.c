@@ -235,11 +235,9 @@ static int compare_allchars(
 
    PRINTF(DBG_SEARCH,("   We are inside index.c:compare_allchars\n"));
 
-   while (*word && *word != '\t' && start < end && *start != '\t') {
-//      if (!isspacealnum(*start)) {
-//	 ++start;
-//	 continue;
-//      }
+   while (*word && *word != '\t' && *word != '\n' &&
+	  start < end && *start != '\t' && *start != '\n')
+   {
 #if 0
       if (isspace( (unsigned char) *start ))
 	 c2 = ' ';
@@ -271,7 +269,12 @@ static int compare_allchars(
       ++start;
    }
 
-   result = (*word && *word != '\t' ? 1 : ((*start != '\t') ? -1 : 0));
+   if (*word && *word != '\t' && *word != '\n')
+      result = 1;
+   else if (*start != '\t' && *start != '\n')
+      result = -1;
+   else
+      result = 0;
 
    PRINTF(DBG_SEARCH,("   result = %d\n", result));
    return  result;
@@ -291,7 +294,9 @@ static int compare_alnumspace(
    PRINTF(DBG_SEARCH,("   We are inside index.c:compare_alnumspace\n"));
 
    /* FIXME.  Optimize this inner loop. */
-   while (*word && *word != '\t' && start < end && *start != '\t') {
+   while (*word && *word != '\t' && *word != '\n' &&
+	  start < end && *start != '\t' && *start != '\n')
+   {
       if (!dbindex -> isspacealnum[* (const unsigned char *) start]) {
 	 ++start;
 	 continue;
@@ -339,13 +344,18 @@ static int compare_alnumspace(
    }
 
    while (
-       *start != '\t' &&
+       *start != '\t' && *start != '\n' &&
        !dbindex -> isspacealnum[* (const unsigned char *) start])
    {
       ++start;
    }
 
-   ret = *word && *word != '\t' ? 1 : ((*start != '\t') ? -1 : 0);
+   if (*word && *word != '\t' && *word != '\n')
+      ret = 1;
+   else if (*start != '\t' && *start != '\n')
+      ret = -1;
+   else
+      ret = 0;
 
    PRINTF(DBG_SEARCH,("   result = %d\n", ret));
 
@@ -401,6 +411,53 @@ static int compare(
    }else{
       return compare_alnumspace( word, dbindex, start, end );
    }
+}
+
+static int dict_entry_is_4column (
+   const char *entry, const char *index_end)
+{
+   int tab_count = 0;
+
+   for (; entry < index_end; ++entry){
+      switch (*entry){
+      case '\t':
+	 ++tab_count;
+	 break;
+      case '\n':
+	 switch (tab_count){
+	 case 2:
+	    return 0;
+	 case 3:
+	    return 1;
+	 default:
+	    goto err;
+	 }
+      }
+   }
+
+ err:
+   err_fatal (__func__, "bad .index file");
+}
+
+static int compare_1or4 (
+   const char *word,
+   const dictIndex *dbindex,
+   const char *start, const char *end,
+   const char **column_1or4)
+{
+   if (dict_entry_is_4column (start, end)){
+      while (start < end && *start != '\t')
+	 ++start;
+      ++start;
+      while (start < end && *start != '\t')
+	 ++start;
+      ++start;
+   }
+
+   if (column_1or4)
+      *column_1or4 = start;
+
+   return compare (word, dbindex, start, end);
 }
 
 static const char *binary_search(
@@ -606,7 +663,7 @@ static dictWord *dict_word_create(
 	 else if (!offs_word)
 	    offs_word = offset + 1;
 	 else{
-	    err_internal( __FUNCTION__,
+	    err_internal( __func__,
 			  "Too many tabs in index entry \"%*.*s\"\n",
 			  offs_length, offs_length, entry );
 	 }
@@ -614,7 +671,7 @@ static dictWord *dict_word_create(
    }
 
    if (!offs_length)
-      err_internal( __FUNCTION__,
+      err_internal( __func__,
 		    "Too few tabs in index entry \"%20.20s\"\n", entry );
 
    dw->start    = b64_decode_buf (entry + offs_offset, offs_length - offs_offset - 1);
@@ -730,13 +787,11 @@ static int dict_search_exact( lst_List l,
    while (pt && pt < dbindex->end) {
       if (!compare( word, dbindex, pt, dbindex->end )) {
 	 if (!uniq_only || !previous
-	     || compare(previous, dbindex, pt, dbindex->end))
+	     || compare_1or4 (previous, dbindex, pt, dbindex->end, &previous))
 	 {
 	    ++count;
 	    if (l){
-	       if (!dict_add_word_to_list
-		   (l, database, dbindex, previous = pt))
-	       {
+	       if (!dict_add_word_to_list (l, database, dbindex, pt)) {
 		  break;
 	       }
 	    }
@@ -786,7 +841,10 @@ static int dict_search_prefix_first( lst_List l,
 	    return count;
 	 case -1:
 	 case 0:
-	    if (!previous || compare(previous, dbindex, pt, dbindex->end)) {
+	    if (!previous
+		|| compare_1or4 (previous, dbindex, pt, dbindex->end,
+				 &previous))
+	    {
 	       if (flag == BMH_FIRST){
 		  c = (unsigned char) pt [wordlen];
 		  if (c != '\t' && !isspacepuncttab [c])
@@ -807,7 +865,6 @@ static int dict_search_prefix_first( lst_List l,
 		  --skip_count;
 	       }
 	    }
-	    previous = pt;
 	    break;
 	 case 1:
 	    return count;
@@ -828,7 +885,7 @@ static int dict_search_prefix (
    const dictDatabase *database, dictIndex *dbindex,
    int skip_count, int item_count)
 {
-   dict_search_prefix_first (l, word, database, dbindex,
+   return dict_search_prefix_first (l, word, database, dbindex,
 			     BMH_PREFIX, skip_count, item_count);
 }
 
@@ -836,7 +893,7 @@ static int dict_search_first (
    lst_List l, const char *word,
    const dictDatabase *database, dictIndex *dbindex)
 {
-   dict_search_prefix_first (l, word, database, dbindex,
+   return dict_search_prefix_first (l, word, database, dbindex,
 			     BMH_FIRST, 0, INT_MAX);
 }
 
@@ -847,8 +904,8 @@ static int dict_search_brute( lst_List l,
 			      int flag,
 			      int patlen )
 {
-   const unsigned char *const start = dbindex->start;
-   const unsigned char *const end   = dbindex->end;
+   const unsigned char *const start = (const unsigned char *) dbindex->start;
+   const unsigned char *const end   = (const unsigned char *) dbindex->end;
    const unsigned char *p, *pt;
    int        count = 0;
    int        result;
@@ -907,11 +964,13 @@ static int dict_search_brute( lst_List l,
 	       if (*pt == '\t')
 		  goto continue2;
 
-	    if (!previous || compare(previous, dbindex, pt + 1, end)) {
+	    if (!previous || compare_1or4 (previous, dbindex, pt + 1, end,
+					   &previous))
+	    {
 	       ++count;
 
 	       if (!dict_add_word_to_list
-		   (l, database, dbindex, previous = pt + 1))
+		   (l, database, dbindex, pt + 1))
 	       {
 		  break;
 	       }
@@ -952,7 +1011,7 @@ static int dict_search_bmh( lst_List l,
    int        count = 0;
    const unsigned char *f = NULL; /* Boolean flag, but has to be a pointer */
    const unsigned char *wpt;
-   const unsigned char *previous = NULL;
+   const char *previous = NULL;
 
    assert (dbindex);
 
@@ -1036,11 +1095,13 @@ static int dict_search_bmh( lst_List l,
 
 	 assert (pt >= start && pt < end);
 
-	 if (!previous || compare(previous, dbindex, pt, dbindex->end)) {
+	 if (!previous || compare_1or4 (previous, dbindex, pt, dbindex->end,
+					&previous))
+	 {
 	    ++count;
 	    if (l){
 	       if (!dict_add_word_to_list
-		   (l, database, dbindex, previous = pt))
+		   (l, database, dbindex, pt))
 	       {
 		  return count;
 	       }
@@ -1181,7 +1242,7 @@ static int dict_search_regexpr( lst_List l,
 	 if (end < start)
 	    end = dbindex->end;
 
-//	 FIND_NEXT(end, dbindex -> end);
+/*	 FIND_NEXT(end, dbindex -> end); */
       }
    }
 #endif
@@ -1198,10 +1259,11 @@ static int dict_search_regexpr( lst_List l,
       ++_dict_comparisons;
 
       if (dict_match (&re, pt, p - pt, 0)) {
-	 if (!previous || compare(previous, dbindex, pt, end)) {
+	 if (!previous || compare_1or4 (previous, dbindex, pt, end, &previous))
+	 {
 	    ++count;
 	    if (!dict_add_word_to_list
-		(l, database, dbindex, previous = pt))
+		(l, database, dbindex, pt))
 	    {
 	       break;
 	    }
@@ -1273,9 +1335,10 @@ static int dict_search_soundex( lst_List l,
 
       txt_soundex2 (buffer, soundex2);
       if (!strcmp (soundex, soundex2)) {
-	 if (!previous || compare(previous, dbindex, pt, end)) {
+	 if (!previous || compare_1or4 (previous, dbindex, pt, end, &previous))
+	 {
 	    if (!dict_add_word_to_list
-		(l, database, dbindex, previous = pt))
+		(l, database, dbindex, pt))
 	    {
 	       break;
 	    }
@@ -1794,10 +1857,10 @@ dictIndex *dict_index_open(
    memset( i, 0, sizeof( struct dictIndex ) );
 
    if ((i->fd = open( filename, O_RDONLY )) < 0)
-      err_fatal_errno( __FUNCTION__,
+      err_fatal_errno( __func__,
 		       "Cannot open index file \"%s\"\n", filename );
    if (fstat( i->fd, &sb ))
-      err_fatal_errno( __FUNCTION__,
+      err_fatal_errno( __func__,
 		       "Cannot stat index file \"%s\"\n", filename );
    i->size = sb.st_size;
 
@@ -1807,17 +1870,17 @@ dictIndex *dict_index_open(
          i->start = mmap( NULL, i->size, PROT_READ, MAP_SHARED, i->fd, 0 );
          if ((void *)i->start == (void *)(-1))
             err_fatal_errno (
-               __FUNCTION__,
+               __func__,
                "Cannot mmap index file \"%s\"\b", filename );
       } else i->start = NULL;  /* allow for /dev/null dummy index */
 #else
-      err_fatal (__FUNCTION__, "This should not happen");
+      err_fatal (__func__, "This should not happen");
 #endif
    }else{
       i->start = xmalloc (i->size);
       if (-1 == read (i->fd, (char *) i->start, i->size))
 	 err_fatal_errno (
-	    __FUNCTION__,
+	    __func__,
 	    "Cannot read index file \"%s\"\b", filename );
 
       close (i -> fd);
@@ -1957,7 +2020,7 @@ void dict_index_close( dictIndex *i )
 	 i->fd = 0;
       }
 #else
-      err_fatal (__FUNCTION__, "This should not happen");
+      err_fatal (__func__, "This should not happen");
 #endif
    }else{
       if (i -> start)
