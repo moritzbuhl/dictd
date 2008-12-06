@@ -1,7 +1,7 @@
 /* index.c -- 
  * Created: Wed Oct  9 14:52:23 1996 by faith@dict.org
- * Revised: Tue Apr 23 09:14:43 2002 by faith@dict.org
  * Copyright 1996, 1997, 1998, 2000, 2002 Rickard E. Faith (faith@dict.org)
+ * Copyright 2002-2008 Aleksey Cheusov (vle@gmx.net)
  * 
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -1132,7 +1132,9 @@ static int dict_search_substring( lst_List l,
 				  const dictDatabase *database,
 				  dictIndex *dbindex)
 {
-   return dict_search_bmh( l, word, database, dbindex, BMH_SUBSTRING );
+   return dict_search_bmh (
+      l, (const unsigned char *) word,
+      database, dbindex, BMH_SUBSTRING );
 }
 
 static int dict_search_word(
@@ -1143,7 +1145,6 @@ static int dict_search_word(
    lst_Position pos;
    dictWord *dw;
    const char *p;
-   char *ptr;
    int ret1, ret2;
    int count;
    int len;
@@ -1180,7 +1181,9 @@ static int dict_search_word(
 
       return ret1 + ret2;
    }else{
-      return dict_search_bmh( l, word, database, database->index, BMH_WORD );
+      return dict_search_bmh (
+	 l, (const unsigned char *) word,
+	 database, database->index, BMH_WORD );
    }
 }
 
@@ -1570,7 +1573,9 @@ static int dict_search_last (
       }
       return ret;
    }else{
-      return dict_search_bmh( l, word, database, database -> index, BMH_LAST );
+      return dict_search_bmh(
+	 l, (const unsigned char *) word,
+	 database, database -> index, BMH_LAST );
    }
 }
 
@@ -1739,7 +1744,6 @@ int dict_search (
    int *extra_data_size)
 {
    int count = 0;
-   dictWord *dw;
 
    int norm_strategy = strategy & ~DICT_MATCH_MASK;
 

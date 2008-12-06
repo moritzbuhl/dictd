@@ -1,7 +1,7 @@
 /* dictd.c -- 
  * Created: Fri Feb 21 20:09:09 1997 by faith@dict.org
- * Revised: Sat May  4 21:58:16 2002 by faith@dict.org
  * Copyright 1997-2000, 2002 Rickard E. Faith (faith@dict.org)
+ * Copyright 2002-2008 Aleksey Cheusov (vle@gmx.net)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -658,11 +658,7 @@ static int init_virtual_db_list (const void *datum)
 
 static int init_mime_db_list (const void *datum)
 {
-   lst_List list;
    dictDatabase *db  = (dictDatabase *)datum;
-   dictWord *dw;
-   char *buf;
-   int ret;
 
    if (!db -> mime_db)
       return 0;
@@ -1397,16 +1393,6 @@ static void destroy ()
    dict_destroy_strategies ();
 }
 
-static void dict_make_dbs_available (dictConfig *cfg)
-{
-   lst_Position  p;
-   dictDatabase *db;
-
-   LST_ITERATE (cfg -> dbl, p, db) {
-      db -> available = 1;
-   }
-}
-
 FILE *pid_fd = NULL;
 
 static void pid_file_create ()
@@ -1455,7 +1441,7 @@ int main (int argc, char **argv, char **envp)
    struct sockaddr_in csin;
    int                c;
    time_t             startTime;
-   socklen_t          alen         = 0;
+   socklen_t          alen         = sizeof (csin);
    int                detach       = 1;
    int                forceStartup = 0;
    int                i;

@@ -1,7 +1,7 @@
 /* dictzip.c -- 
  * Created: Tue Jul 16 12:45:41 1996 by faith@dict.org
- * Revised: Mon Apr 22 11:40:17 2002 by faith@dict.org
  * Copyright 1996-1998, 2000, 2002 Rickard E. Faith (faith@dict.org)
+ * Copyright 2002-2008 Aleksey Cheusov (vle@gmx.net)
  * 
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -207,7 +207,7 @@ int dict_data_zip( const char *inFilename, const char *outFilename,
    while (!feof( inStr )) {
       if ((count = fread( inBuffer, 1, chunkLength, inStr ))) {
 	 dict_data_filter( inBuffer, &count, IN_BUFFER_SIZE, preFilter );
-	 
+
 	 inputCRC = crc32( inputCRC, inBuffer, count );
 	 zStream.next_in   = inBuffer;
 	 zStream.avail_in  = count;

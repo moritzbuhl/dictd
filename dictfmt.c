@@ -1,8 +1,7 @@
 /* dictfmt.c -- 
  * Created: Sun Jul 20 20:17:11 1997 by faith@acm.org
- * Revised: Sat Sep 27 23:47:04 2003 by faith@acm.org
  * Copyright 1997, 1998, 2003 Rickard E. Faith (faith@acm.org)
- * Copyright 2002-2007 Aleksey Cheusov (vle@gmx.net)
+ * Copyright 2002-2008 Aleksey Cheusov (vle@gmx.net)
  * 
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -144,12 +143,6 @@ static void init (const char *fn)
    alphabet_pool = str_pool_create ();
 }
 
-static int print_alphabet (const void *symbol, void *arg)
-{
-   printf ("%s: %s\n", (char *) arg, (const char *) symbol);
-   return 0;
-}
-
 static void destroy (void)
 {
    str_pool_destroy (alphabet_pool);
@@ -247,7 +240,6 @@ static void fmt_string( const char *s )
 #if 0
    char *t;
 #endif
-   size_t  len;
 
    if (!str)
       return;
@@ -452,7 +444,6 @@ static void write_hw_to_index (
    int start, int end)
 {
    int len = 0;
-   char *trimmed_new_word = NULL;
    char *new_word = NULL;
 
    if (!word)
@@ -912,7 +903,6 @@ static void fmt_headword_for_url (void)
 static void fmt_headword_for_alphabet (void)
 {
    const char *key;
-   size_t len;
    size_t sum_size = 0;
    str_Position pos;
    char *alphabet;
@@ -1033,7 +1023,6 @@ static void fmt_headword_for_casesensitive (void)
 static void fmt_headword_for_dictfmt_ver (void)
 {
    char ver [200];
-   char *p;
    snprintf (ver, sizeof (ver),
 	     "00-database-dictfmt-%s", DICT_VERSION);
 
@@ -1480,8 +1469,6 @@ int main( int argc, char **argv )
 	    const char *offset   = NULL;
 	    const char *size     = NULL;
 	    const char *data     = NULL;
-
-	    size_t len = strlen (buffer);
 
 	    int i_offset = 0;
 	    int i_size   = 0;

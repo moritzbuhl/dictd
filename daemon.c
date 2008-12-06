@@ -1,7 +1,7 @@
 /* daemon.c -- Server daemon
  * Created: Fri Feb 28 18:17:56 1997 by faith@dict.org
- * Revised: Tue Apr 23 09:14:45 2002 by faith@dict.org
  * Copyright 1997, 1998, 1999, 2000, 2002 Rickard E. Faith (faith@dict.org)
+ * Copyright 2002-2008 Aleksey Cheusov (vle@gmx.net)
  * 
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -940,9 +940,6 @@ static int dict_search_words (
    int mc = 0;
    int matches_count = 0;
    const char *word;
-
-   int old_count = 0;
-   int db_found  = 0;
 
    word_list_pos = lst_init_position (word_list);
    while (word_list_pos){

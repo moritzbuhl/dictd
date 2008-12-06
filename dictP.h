@@ -1,8 +1,9 @@
 
 /* dictP.h -- 
  * Created: Fri Mar  7 10:54:05 1997 by faith@dict.org
- * Revised: Fri Dec 22 06:06:33 2000 by faith@dict.org
  * Copyright 1997, 1999, 2000 Rickard E. Faith (faith@dict.org)
+ * Copyright 2002-2008 Aleksey Cheusov (vle@gmx.net)
+ *
  * This program comes with ABSOLUTELY NO WARRANTY.
  * 
  * This program is free software; you can redistribute it and/or modify it
@@ -89,6 +90,10 @@
 #include <stddef.h>
 #else
 typedef unsigned int size_t;
+#endif
+
+#if !HAVE_SOCKLEN_T
+typedef int socklen_t;
 #endif
 
 #if !HAVE_STRDUP
@@ -263,9 +268,6 @@ extern int mbtowc__ (wchar_t *pwc, const char *s, size_t n);
 # include <stdlib.h>
 #endif
 
-/* Always use local (libmaa) getopt */
-#include <getopt.h>
-
 /* We actually need a few non-ANSI C things... */
 #if defined(__STRICT_ANSI__)
 extern char     *strdup( const char * );
@@ -297,7 +299,6 @@ extern FILE     *fdopen( int fildes, const char *mode );
 #endif
 
 #include <netdb.h>
-#include <sys/socket.h>
 #include <netinet/in.h>
 
 /* Provide mmap stuff */
@@ -314,6 +315,14 @@ extern FILE     *fdopen( int fildes, const char *mode );
 # include <getopt.h>
 #else
 #if !HAVE_GETOPT_LONG
+struct option
+{
+  const char *name;
+  int has_arg;
+  int *flag;
+  int val;
+};
+
 int getopt_long(int argc, char * const argv[],
                   const char *optstring,
                   const struct option *longopts, int *longindex);

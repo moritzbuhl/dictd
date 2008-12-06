@@ -1,7 +1,7 @@
 /* data.c -- 
  * Created: Tue Jul 16 12:45:41 1996 by faith@dict.org
- * Revised: Sat Mar 30 10:46:06 2002 by faith@dict.org
  * Copyright 1996, 1997, 1998, 2000, 2002 Rickard E. Faith (faith@dict.org)
+ * Copyright 2002-2008 Aleksey Cheusov (vle@gmx.net)
  * 
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -113,7 +113,7 @@ static int dict_read_header( const char *filename,
       return 0;
    }
    header->type = DICT_GZIP;
-   
+
    header->method       = getc( str );
    header->flags        = getc( str );
    header->mtime        = getc( str ) <<  0;
