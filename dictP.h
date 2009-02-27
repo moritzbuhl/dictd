@@ -80,10 +80,6 @@
 #  define strchr index
 #  define strrchr rindex
 # endif
-# if !HAVE_MEMCPY
-#  define memcpy(d, s, n) bcopy ((s), (d), (n))
-#  define memmove(d, s, n) bcopy ((s), (d), (n))
-# endif
 #endif
 
 #if HAVE_SIZE_T
@@ -262,11 +258,9 @@ extern int mbtowc__ (wchar_t *pwc, const char *s, size_t n);
 
 /* Include some standard header files. */
 #include <stdio.h>
-#if HAVE_UNISTD_H
-# include <sys/types.h>
-# include <unistd.h>
-# include <stdlib.h>
-#endif
+#include <sys/types.h>
+#include <unistd.h>
+#include <stdlib.h>
 
 /* We actually need a few non-ANSI C things... */
 #if defined(__STRICT_ANSI__)
