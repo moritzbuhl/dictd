@@ -1,4 +1,55 @@
-2009-02-28  Aleksey Cheusov <vle@gmx.net>
+2009-10-04  Aleksey Cheusov <vle@gmx.net>
+
+  * NEWS, configure.in:
+  Version -> 1.11.2
+  NEWS update
+
+2009-09-21  Aleksey Cheusov <vle@gmx.net>
+
+  * test/dictd_test.in:
+  update for regression tests for some type of sort(1) commands
+
+  * test/db.expect.testdb_utf8.dict, test/db.expect.testdb_utf8.index:
+  oops, I forgot to commit it
+
+2009-09-20  Aleksey Cheusov <vle@gmx.net>
+
+  * test/db.expect.smiley_1.index, test/db.expect.smiley_2.index, test/db.expect.smiley_3.index, test/db.expect.smiley_4.index, test/db.expect.smiley_5.index, test/dictd_smiley_2_res.expected.txt, test/dictd_smiley_4_res.expected.txt, test/dictd_smiley_5_res.expected.txt:
+  updates for regression tests (sort -k1,1)
+
+  * test/dictd_test.in: fix for building from outside OBJDIR
+
+2009-09-19  Aleksey Cheusov <vle@gmx.net>
+
+  * dictfmt.c:
+  dictfmt spawns sort command to sort the index. When there are several
+  entries for the same headword, they get sorted BY OFFSET AND SIZE (in
+  addition to headwords), which don't sort alphabetically. As a result, the
+  order of identical headwords is messed up.
+  To fix these problem -k1,3 option is replaced with -k1,1.
+  Thanks to Goran Tal for pointing out.
+
+  * test/db.expect.cyrillic_1.index, test/db.expect.dict, test/db.expect.index, test/dictd_cyrillic_1_res.expected.txt, test/dictd_defstrat_1_res.expected.txt, test/dictd_test.in, test/testdb.c5.txt, test/testdb.e.txt, test/testdb.f.txt, test/testdb.h.txt, test/testdb.j.txt, test/testdb.p.txt, TODO, dictfmt.c:
+  dictfmt: superfluous spaces are removed not only from the beginng and
+     the end of a headword but also inside a multiword headwords.
+     Thank to Goran Tal for pointing out.
+
+  * dictfmt.1.in: FIX: s/--index-keep-headword/--index-keep-orig/
+
+  * test/dictd_cyrillic_3_res.expected.txt, test/dictd_defstrat_1_res.expected.txt, test/dictd_defstrat_2_res.expected.txt, test/dictd_indexdata_1_res.expected.txt, test/dictd_limits_1_res.expected.txt, test/dictd_mixedcase_1_res.expected.txt, test/dictd_test.in:
+  all test files are CR NL, just like dict protocol is
+
+  * test/dictd_cyrillic_3_res.expected.txt, test/input.cyrillic_3.txt, index.c:
+  FIX: When search is handled by dict_search_bmh() function, the first
+     character from the first entry in the index file is missing. Usually
+     this is some of 00-database-* entries.
+     Thanks to Goran Tal for a bug report and patch.
+
+     Add regression test for this case.
+
+  * test/dictd_test.in: minor reorganization
+
+2009-03-01  Aleksey Cheusov <vle@gmx.net>
 
   * configure.in: version -> 1.11.1
 
