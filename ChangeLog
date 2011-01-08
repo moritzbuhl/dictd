@@ -1,3 +1,132 @@
+2011-01-09  Aleksey Cheusov <vle@gmx.net>
+
+  * NEWS, configure.in, dict_lookup, dict_lookup.1.in:
+  new defaults for dict_lookup
+  version -> 1.12.0
+
+  * NEWS, dict_lookup.1.in: update for dict_lookup.1 and NEWS
+
+  * Makefile.in, configure.in, dict_lookup:
+  "install" and "install.dict" targets install dict_lookup script
+     and its manual page.
+
+  * dict_lookup.1.in: update
+
+  * dict_lookup.1.in: initial version of manual page for dict_lookup
+
+  * dictd.c: restore SA_RESTART
+
+  * NEWS, dictd.c:
+  restore SA_RESTART
+
+  * NEWS: updates
+
+  * NEWS, configure.in:
+  version -> 1.11.3
+  updates in NEWS
+
+  * test/dictzip_test.in: remove dead code
+
+2011-01-08  Aleksey Cheusov <vle@gmx.net>
+
+  * daemon.c, dictd.c, dictd.h:
+  SA_RESTART is not needed anymore. This unbreaks dictd on some platforms.
+  Minor clean-ups.
+
+  * data.c, dict.c, dictfmt.c, dictzip.c, index.c:
+  Fixes for gcc warning messages seen on NetBSD-5.1/x86_64
+
+  * daemon.c:
+  fix for SHOW SERVER in dictd.
+     On systems where sizeof(int) != sizeof (long)
+     values in "Uncompressed" column may be contain random garbage.
+     This problem was seen on NetBSD/x86_64/5.1
+
+  * test/dictzip_test.in, Makefile.in, configure.in, data.c:
+  Fix for sf bug #3098788
+  https://sourceforge.net/tracker/?func=detail&aid=3098788&group_id=605&atid=100605
+
+  Regresson tests for dictzip were added.
+
+2011-01-05  Aleksey Cheusov <vle@gmx.net>
+
+  * TODO: new search strategy
+
+2011-01-03  Aleksey Cheusov <vle@gmx.net>
+
+  * dict_lookup: support for option -h
+
+2010-10-20  Aleksey Cheusov <vle@gmx.net>
+
+  * dict_lookup:
+  Further renamings.
+  New var D_DICT_CMD was introduced
+
+2010-10-19  Aleksey Cheusov <vle@gmx.net>
+
+  * dict_lookup: spelling correction
+
+  * dict_lookup: remove non-existant option -utf8 from xclip
+
+  * dict_lookup: rename variables
+
+  * dict_lookup: improvements, clean-ups
+
+  * dict_lookup: introduce LESS_PROG
+
+  * dict_lookup: coloritrc_dict -> dict
+
+  * dict_lookup: Add options -h, -x, -y, -s and -q as well as new variables
+
+2010-10-18  Aleksey Cheusov <vle@gmx.net>
+
+  * dict_lookup: Yet another improvements
+
+  * dict_lookup: lots of improvements and fixes
+
+  * dict_lookup: lots of improvements
+
+  * dict_lookup: Remove bashism; Fixes
+
+  * dict_lookup: initial version of script by A.Vorontsov
+
+  * dict_lookup: removed
+
+  * dict_lookup: initial version of script by A.Vorontsov
+
+2010-09-05  Aleksey Cheusov <vle@gmx.net>
+
+  * net.c: remove #include <sys/termios.h>
+
+  * dictd.c: fix for gcc warning message
+
+2010-05-16  Aleksey Cheusov <vle@gmx.net>
+
+  * TODO: new tasks
+
+  * Makefile.in: fixed: compilation failure on Solaris (lex has no -o option)
+
+2010-05-01  Aleksey Cheusov <vle@gmx.net>
+
+  * dictfmt.c:
+  Increase internal buffer size from 10240 to 102400 bytes.
+  Minor clean-ups
+
+  * str.c: +1 assert
+
+2010-04-12  Aleksey Cheusov <vle@gmx.net>
+
+  * test/dictd_test.in: fixes for Tru64
+
+  * dictP.h:
+  fixed: compilation failure on Tru64 (presense of getopt.h doesn`t mean presense of getopt_long(3))
+
+  * configure.in: AC_FUNC_MALLOC is removed. This unbreaks dictd on Tru64.
+
+2010-04-11  Aleksey Cheusov <vle@gmx.net>
+
+  * dictd.c: get_entry_info: only NL is replaced with \0 (check for NL added)
+
 2009-10-04  Aleksey Cheusov <vle@gmx.net>
 
   * NEWS, configure.in:
@@ -1721,7 +1850,7 @@
   fixed: incorrect charset determination.
       Thanks to Roland Rosenfeld for report and patch.
 
-2004-01-28  kirk  <kirk@chen.chizhovka.net>
+2004-01-28  kirk  <kirk@asrock.chizhovka.net>
 
   * dictfmt.1, dictfmt.c:
   Added --break-headwords option for use with --headword-separator, so
