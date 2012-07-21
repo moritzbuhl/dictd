@@ -1,3 +1,57 @@
+2012-07-22  Aleksey Cheusov <vle@gmx.net>
+
+  * NEWS, configure.in:
+  Version -> 1.12.1
+    dictl.in:
+      Fix for Debian bug #677868 reported by Stepan Golosunov.
+
+    dictd.8:
+      Fixes for mistypes found by A. Costa. Thanks!
+
+    dictzip:
+      Fix for sf.net bug #3390567 reported by Ivo Danihelka.
+
+    INSTALL:
+      Fix for sf.net bug #3398178
+
+    colorit:
+      Fix for option -c. Now it works correctly.
+
+    examples/dictd_virtual.conf:
+      Fix incorrect keyword for virtual database.
+        Thanks to Marc-Jano Knopp for the report!
+
+  * colorit.in: fix in colorit: option -c now works correctly
+
+  * dictzip.c:
+  Check return value of fwrite, fflush and fclose functions.
+  This fixes sf bug #3390567
+
+  * dictl.in:
+  Fix for Debian bug #677868 reported by Stepan Golosunov.
+
+2012-02-13  Aleksey Cheusov <vle@gmx.net>
+
+  * dictd.8.in: fixes for mistypes found by A. Costa. Thanks!
+
+2011-10-22  Aleksey Cheusov <vle@gmx.net>
+
+  * INSTALL: Fix for sf.net bug #3398178
+
+2011-04-16  Aleksey Cheusov <vle@gmx.net>
+
+  * examples/dictd_virtual.conf:
+  fix in dictd_virtual.conf: incorrect keyword for virtual database.
+     Thanks to Marc-Jano Knopp for the report!
+
+2011-04-10  Aleksey Cheusov <vle@gmx.net>
+
+  * Makefile.in: Add -c to ${INSTALL} envocations
+
+2011-01-10  Aleksey Cheusov <vle@gmx.net>
+
+  * Makefile.in: fix for installing from obj directory
+
 2011-01-09  Aleksey Cheusov <vle@gmx.net>
 
   * NEWS, configure.in, dict_lookup, dict_lookup.1.in:
