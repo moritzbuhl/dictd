@@ -28,16 +28,9 @@
 #include <string.h>
 #include <time.h>
 #include <ctype.h>
-
-#if HAVE_WCTYPE_H
 #include <wctype.h>
-#endif
-
 #include <locale.h>
-
-#if HAVE_GETOPT_H
 #include <getopt.h>
-#endif
 
 #define FMT_MAXPOS  72
 #define FMT_INDENT  0
@@ -58,7 +51,6 @@ static FILE *str;
 
 /* defaults to creating ASCII database */
 static int utf8_mode     = 0;
-static int bit8_mode     = 0;
 
 static int index_keep_orig_mode = 0;
 
@@ -160,11 +152,15 @@ static void destroy_and_exit (int exit_status)
 static void fmt_openindex( const char *filename )
 {
    char buffer [1024];
+   const char *sort_cmd = getenv("DICTFMT_SORT");
 
-   if (bit8_mode || utf8_mode || allchars_mode)
-      snprintf( buffer, sizeof (buffer), "sort -t '\t' -k 1,1 " );
+   if (!sort_cmd)
+      sort_cmd = "sort";
+
+   if (utf8_mode || allchars_mode)
+      snprintf( buffer, sizeof (buffer), "%s -st '\t' -k 1,1 ", sort_cmd );
    else
-      snprintf( buffer, sizeof (buffer), "sort -t '\t' -df -k 1,1 " );
+      snprintf( buffer, sizeof (buffer), "%s -st '\t' -df -k 1,1 ", sort_cmd );
 
    if (filename){
       strlcat (buffer, "> ", sizeof (buffer));
@@ -442,7 +438,9 @@ static void trim_center (char *s)
 
 	 if (spc && prev_spc){
 	 }else{
-	    memcpy (t, h, len);
+	    if (t != h){
+	       memmove(t, h, len);
+	    }
 	    t += len;
 	 }
 	 h += len;
@@ -683,7 +681,7 @@ static int fmt_newheadword_special (const char *word)
 
 static void fmt_test_nonascii (const char *word)
 {
-   if (!bit8_mode && !utf8_mode){
+   if (!utf8_mode){
       if (contain_nonascii_symbol (word)){
 	 fprintf (stderr, "\n8-bit head word \"%s\"is encountered while \"C\" locale is used\n", word);
 	 destroy_and_exit (1);
@@ -898,14 +896,10 @@ static void set_utf8bit_mode (const char *locale_)
       !strcmp (charset, "US-ASCII") ||
       (locale_ [0] == 'C' && locale_ [1] == 0);
 
-   bit8_mode = !ascii_mode && !utf8_mode;
-
-#ifndef SYSTEM_UTF8_FUNCS
    if (utf8_mode){
       fprintf (stderr, "Using --locale xx_YY.UTF-8 for creating utf-8 database is deprecated,\n\
 use --utf8 option instead.\n");
    }
-#endif
 }
 
 static const char string_unknown [] = "unknown";
@@ -1060,14 +1054,6 @@ static void fmt_headword_for_utf8 (void)
    }
 }
 
-static void fmt_headword_for_8bit (void)
-{
-   if (bit8_mode){
-      fmt_newheadword("00-database-8bit-new");
-      fmt_newline();
-   }
-}
-
 static void fmt_headword_for_allchars (void)
 {
    if (allchars_mode){
@@ -1104,7 +1090,6 @@ static void fmt_predefined_headwords_before ()
       return;
 
    fmt_headword_for_utf8 ();
-   fmt_headword_for_8bit ();
    fmt_headword_for_allchars ();
    fmt_headword_for_casesensitive ();
    fmt_headword_for_def_strat ();
@@ -1264,7 +1249,6 @@ int main( int argc, char **argv )
 	 mime_header = str_copy (optarg);
 	 break;
       case 514:
-	 bit8_mode = 0;
 	 utf8_mode = 1;
 	 break;
       case 515:

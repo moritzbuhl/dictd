@@ -13,16 +13,15 @@ gen_file (){
 #	return 0
 #    fi
 
-    awk -v sz="$1" '
+    @AWK@ -v sz="$1" '
     BEGIN {
-        c = 0
+        c = 1
         for (i=0; i < sz; ++i) {
             printf "%c", c
             ++c
             if (c == 253) # not 256
-                c = 0
+                c = 1
         }
-        exit 0
     }'
 }
 
@@ -44,7 +43,7 @@ EOF
 gen_regions (){
     # $1 - size
     # $2 - step
-    awk -v size="$1" -v step="$2" '
+    @AWK@ -v size="$1" -v step="$2" '
     BEGIN {
         for (i=0; i < size; i += step)
             for (j=i+step; j <= size; j += step)

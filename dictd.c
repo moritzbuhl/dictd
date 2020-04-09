@@ -109,6 +109,9 @@ const char        *preprocessor = NULL;
 const char        *bind_to      = NULL;
 int bind_to_set; /* 1 if set by command line option */
 
+int dictd_address_family              = AF_INET;
+int dictd_address_family_set;
+
 /* information about dict server, i.e.
    text returned by SHOW SERVER command
 */
@@ -221,7 +224,7 @@ static void reaper( int dummy )
 #endif
    pid_t      pid;
 
-   while ((pid = wait3(&status, WNOHANG, NULL)) > 0) {
+   while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
       ++_dict_reaps;
 
       if (flg_test(LOG_SERVER))
@@ -1228,13 +1231,12 @@ static void help( void )
                                    <strategies> is a comma-separated list.",
 "   --add-strategy <strat>:<descr>  adds new strategy <strat>\n\
                                    with a description <descr>.",
-"   --listen-to                     bind a socket to the specified address",
+"   --listen-to <host>              listen to the specified address",
+"   --address-family <family>       listen to either IPv4 or IPv6 addresses",
 "\n------------------ options for debugging ---------------------------",
 "   --fast-start                 don't create additional (internal) index.",
-#ifdef HAVE_MMAP
 "   --without-mmap               do not use mmap() function and load files\n\
                                 into memory instead.",
-#endif
 "   --stdin2stdout               copy stdin to stdout (addition to -i option).",
       0 };
    const char        **p = help_msg;
@@ -1407,8 +1409,6 @@ static void set_locale_and_flags (const char *loc)
       !strcmp (charset, "ANSI_X3.4-1968") ||
       !strcmp (charset, "US-ASCII") ||
       (locale [0] == 'C' && locale [1] == 0);
-
-   bit8_mode = !ascii_mode && !utf8_mode;
 }
 
 static void set_umask (void)
@@ -1480,7 +1480,7 @@ int main (int argc, char **argv, char **envp)
 {
    int                childSocket;
    int                masterSocket;
-   struct sockaddr_in csin;
+   struct sockaddr_storage csin;
    int                c;
    time_t             startTime;
    socklen_t          alen         = sizeof (csin);
@@ -1514,10 +1514,8 @@ int main (int argc, char **argv, char **envp)
       { "force",    1, 0, 'f' },
       { "inetd",    0, 0, 'i' },
       { "locale",           1, 0, 506 },
-#ifdef HAVE_MMAP
       { "no-mmap",          0, 0, 508 },
       { "without-mmap",     0, 0, 508 },
-#endif
       { "default-strategy", 1, 0, 511 },
       { "without-strategy", 1, 0, 513 },
       { "add-strategy",     1, 0, 516 },
@@ -1526,6 +1524,7 @@ int main (int argc, char **argv, char **envp)
       { "listen-to",        1, 0, 519 },
       { "pid-file",         1, 0, 521 },
       { "stdin2stdout",     0, 0, 522 },
+      { "address-family",   1, 0, 523 },
       { 0,                  0, 0, 0  }
    };
 
@@ -1649,6 +1648,18 @@ int main (int argc, char **argv, char **envp)
       case 522:
 	 stdin2stdout_mode = 1;
 	 break;
+      case 523:
+	 if (optarg[0] == '4' && optarg[1] == '\0')
+	    dictd_address_family     = AF_INET;
+	 else if (optarg[0] == '6' && optarg[1] == '\0')
+	    dictd_address_family     = AF_INET6;
+	 else {
+	    fprintf (stderr, "incorrect value for option --address-family\n");
+	    exit (1);
+	 }
+
+	 dictd_address_family_set = 1;
+	 break;
       case 'h':
       default:  help(); exit(0);                          break;
       }
@@ -1745,7 +1756,7 @@ int main (int argc, char **argv, char **envp)
       exit(0);
    }
 
-   masterSocket = net_open_tcp( bind_to, daemon_service, depth );
+   masterSocket = net_open_tcp( bind_to, daemon_service, depth, dictd_address_family );
 
 
    for (;;) {

@@ -58,11 +58,13 @@ static void daemon_status( const char *cmdline, int argc, const char **argv );
 static void daemon_help( const char *cmdline, int argc, const char **argv );
 static void daemon_quit( const char *cmdline, int argc, const char **argv );
 
+typedef void (*command_t)( const char *cmdline, int argc, const char **argv );
+
 #define MAXARGCS 3
 static struct {
    int        argc;
    const char *name[MAXARGCS];
-   void       (*f)( const char *cmdline, int argc, const char **argv );
+   command_t  f;
 } commandInfo[] = {
    { 1, {"define"},             daemon_define },
    { 1, {"d"},                  daemon_define },
@@ -88,7 +90,7 @@ static struct {
 };
 #define COMMANDS (sizeof(commandInfo)/sizeof(commandInfo[0]))
 
-static void *(lookup_command)( int argc, const char **argv )
+static command_t lookup_command( int argc, const char **argv )
 {
    size_t i;
    int j;
@@ -423,15 +425,9 @@ static void daemon_write( const char *buf, int len )
 	    if (errno == EPIPE) {
 	       daemon_terminate( 0, "pipe" );
 	    }
-#if HAVE_STRERROR
             log_info( ":E: writing %d of %d bytes:"
                       " retval = %d, errno = %d (%s)\n",
                       left, len, count, errno, strerror(errno) );
-#else
-            log_info( ":E: writing %d of %d bytes:"
-                      " retval = %d, errno = %d\n",
-                      left, len, count, errno );
-#endif
             daemon_terminate( 0, __func__ );
          }
       }
@@ -1506,24 +1502,37 @@ int dict_inetd (int error)
    return _handleconn (error);
 }
 
-int dict_daemon( int s, struct sockaddr_in *csin, int error )
+int dict_daemon( int s, struct sockaddr_storage *csin, int error )
 {
    struct hostent *h;
-	
+   int err = 0;
+   socklen_t csin_len;
+   static char hostname[NI_MAXHOST], service[NI_MAXSERV];
+
    if (setjmp(env)) return 0;
 
-   daemonPort = ntohs(csin->sin_port);
-   daemonIP   = str_find( inet_ntoa(csin->sin_addr) );
-   if ((h = gethostbyaddr((void *)&csin->sin_addr,
-			  sizeof(csin->sin_addr), csin->sin_family))) {
-      daemonHostname = str_find( h->h_name );
-   } else
-      daemonHostname = daemonIP;
+   // We calculate csin_len for NetBSD-9.0 and Solaris-10/11 where
+   // getnameinfo(*,sizeof(sockaddr_storage),*,*,*,*,*) does not work.
+   if (((struct sockaddr *)csin)->sa_family == AF_INET)
+      csin_len = sizeof(struct sockaddr_in);
+   else
+      csin_len = sizeof(struct sockaddr_in6);
 
-   daemonS_in        = s;
-   daemonS_out       = s;
+   //
+   err = getnameinfo ((const struct sockaddr *)csin, csin_len,
+		      hostname, NI_MAXHOST, service, NI_MAXSERV,
+		      NI_NUMERICSERV);
+   if (err){
+      log_error(__func__, ":E: getnameinfo(3) failed: %s\n", gai_strerror(err));
+      exit(1);
+   }
 
-   return _handleconn (error);
+   daemonPort = strtol (service, NULL, 10);
+   daemonIP = str_find (inet_ntopW ((struct sockaddr *)csin));
+   daemonHostname = str_find (hostname);
+   daemonS_in = daemonS_out = s;
+
+   return _handleconn(error);
 }
 
 int _handleconn (int error) {

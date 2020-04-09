@@ -34,15 +34,8 @@
 
 #include <fcntl.h>
 #include <ctype.h>
-
-#if HAVE_WCTYPE_H
 #include <wctype.h>
-#endif
-
-#if HAVE_WCHAR_H
 #include <wchar.h>
-#endif
-
 #include <stdio.h>
 #include <sys/stat.h>
 
@@ -54,14 +47,8 @@ extern int mmap_mode;
 #define MAXWORDLEN    512
 #define BMH_THRESHOLD   3	/* When to start using Boyer-Moore-Hoorspool */
 
-#ifndef SYSTEM_UTF8_FUNCS
 /* defaults to run in UTF-8 mode */
 int utf8_mode=1;        /* dictd uses UTF-8 dictionaries */
-#else
-/* defaults to run in ASCII mode */
-int utf8_mode=0;        /* dictd uses UTF-8 dictionaries */
-#endif
-int bit8_mode = 0;      /* dictd uses 8-BIT dictionaries */
 
 int optStart_mode = 1;	/* Optimize search range for constant start */
 
@@ -153,7 +140,7 @@ static void dict_table_init(void)
 
       tolowertab [i] = tolower (i);
       if (i >= 0x80){
-	 if (utf8_mode || (!utf8_mode && !bit8_mode)){
+	 if (utf8_mode || !utf8_mode){
 	    /* utf-8 or ASCII mode */
 	    tolowertab [i] = i;
 	 }
@@ -1879,7 +1866,6 @@ dictIndex *dict_index_open(
    i->size = sb.st_size;
 
    if (mmap_mode){
-#ifdef HAVE_MMAP
       if (i->size) {
          i->start = mmap( NULL, i->size, PROT_READ, MAP_SHARED, i->fd, 0 );
          if ((void *)i->start == (void *)(-1))
@@ -1887,9 +1873,6 @@ dictIndex *dict_index_open(
                __func__,
                "Cannot mmap index file \"%s\"\b", filename );
       } else i->start = NULL;  /* allow for /dev/null dummy index */
-#else
-      err_fatal (__func__, "This should not happen");
-#endif
    }else{
       i->start = xmalloc (i->size);
       if (-1 == read (i->fd, (char *) i->start, i->size))
@@ -1961,7 +1944,7 @@ dictIndex *dict_index_open(
       }
 
       PRINTF(DBG_INIT, (":I:     \"%s\": flag_8bit=%i\n", filename, i->flag_8bit));
-      if (i->flag_8bit && !bit8_mode){
+      if (i->flag_8bit){
 	 log_info( ":E: locale '%s' can not be used for 8-bit dictionaries. Exiting\n", locale );
 	 exit (1);
       }
@@ -2026,16 +2009,12 @@ void dict_index_close( dictIndex *i )
       return;
 
    if (mmap_mode){
-#ifdef HAVE_MMAP
       if (i->fd >= 0) {
          if(i->start)
             munmap( (void *)i->start, i->size );
 	 close( i->fd );
 	 i->fd = 0;
       }
-#else
-      err_fatal (__func__, "This should not happen");
-#endif
    }else{
       if (i -> start)
 	 xfree ((char *) i -> start);
